@@ -1,0 +1,9 @@
+.env
+.env.*
+**/.env
+**/.env.*
+*密钥*
+**/*密钥*
+*.pem
+*.key
+node_modules/
