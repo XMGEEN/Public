@@ -1,0 +1,1 @@
+window.APP_CONFIG = {"supabaseUrl": "https://mghqjwgxxzqgompqxbyx.supabase.co", "publishableKey": "sb_publishable_IIFwVpa5wF3SGaqQ63ihgQ_lcyLED4m", "table": "keyword_battle_tasks", "bucket": "keyword-battle-inbox", "reportOrigin": "https://xmgeen-tools-123.oss-cn-shenzhen.aliyuncs.com", "reportPrefix": "/keyword-battle/reports/", "maxFileBytes": 10485760};
