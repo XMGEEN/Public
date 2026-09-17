@@ -60,7 +60,14 @@
   async function loadTasks(){
    if(loading)return;loading=true;$('refresh-tasks').disabled=true;
    try{
-    const {data,error,count}=await client.from(C.table).select('id,asin,status,created_at,failure_reason,report_url',{count:'exact'}).eq('user_id',user.id).order('created_at',{ascending:false}).order('id',{ascending:false}).range(pageIndex*10,pageIndex*10+9);
+    let data,error,count;
+    if(C.apiBaseUrl){
+     const session=await client.auth.getSession();if(session.error||!session.data.session)throw Error('session missing');
+     const response=await fetch(C.apiBaseUrl+'/v1/tasks?page='+(pageIndex+1),{headers:{Authorization:'Bearer '+session.data.session.access_token},signal:AbortSignal.timeout(30000)});
+     if(response.status===401)throw Error('JWT expired');if(!response.ok)throw Error('network API failed');
+     const result=await response.json();if(!Array.isArray(result.tasks)||!Number.isInteger(result.total))throw Error('network API response invalid');
+     data=result.tasks;count=result.total;message('api-notice',result.warning||'');
+    }else{({data,error,count}=await client.from(C.table).select('id,asin,status,created_at,failure_reason,report_url',{count:'exact'}).eq('user_id',user.id).order('created_at',{ascending:false}).order('id',{ascending:false}).range(pageIndex*10,pageIndex*10+9));}
     if(error)throw error;total=count??data.length;$('task-count').textContent=total;$('task-rows').replaceChildren();
     for(const task of data){
      const tr=el('tr');tr.append(el('td',task.asin),el('td',formatTime(task.created_at)));
