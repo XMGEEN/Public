@@ -6,7 +6,7 @@
   const base = new URL(page === 'voc-tool' ? '../' : '../../', location.href);
   const link = path => new URL(path, base).href;
   const table = 'voc_tasks';
-  const statuses = {排队中: 'pending', 抓评论: 'running', 标注中: 'running', 旅程中: 'running', 生成报告: 'running', 完成: 'completed', 失败: 'failed'};
+  const statuses = {排队中: 'pending', 抓评论: 'running', 标注中: 'running', 归集中: 'running', 旅程中: 'running', 生成报告: 'running', 完成: 'completed', 失败: 'failed'};
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const make = (tag, text, className) => { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; };
   const show = (id, text, kind = '') => { const node = $(id); if (!node) return; node.textContent = text; node.className = 'message ' + kind; node.hidden = !text; };
