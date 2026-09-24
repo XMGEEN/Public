@@ -21,7 +21,7 @@
  if(!C||!window.supabase){message(page==='login'?'auth-message':'report-message','页面资源加载失败，请刷新后重试。','error');return;}
  const client=window.supabase.createClient(C.supabaseUrl,C.publishableKey,{auth:{storageKey:'keyword-battle-auth',persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
  function loginUrl(){const u=new URL(base);if(page==='report'){const id=new URLSearchParams(location.search).get('task');if(/^[0-9a-f-]{36}$/.test(id??''))u.searchParams.set('task',id);}return u.href;}
- function afterLogin(){const params=new URLSearchParams(location.search),next=params.get('next');if(next==='voc/'||/^voc\/report\/\?task=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(next??'')){location.replace(to(next));return;}const id=params.get('task');location.replace(to(/^[0-9a-f-]{36}$/.test(id??'')?'report/?task='+id:'tool/'));}
+ function afterLogin(){const params=new URLSearchParams(location.search),next=params.get('next');if(next==='QA/'||next==='QA/report/'||/^QA\/(?:report\/)?\?task=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(next??'')||next==='voc/'||/^voc\/report\/\?task=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(next??'')){location.replace(to(next));return;}const id=params.get('task');location.replace(to(/^[0-9a-f-]{36}$/.test(id??'')?'report/?task='+id:'tool/'));}
  async function requireUser(){
   const {data,error}=await client.auth.getUser();
   if(error||!data.user){location.replace(loginUrl());return null;}
