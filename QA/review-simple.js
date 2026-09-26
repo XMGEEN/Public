@@ -5,7 +5,7 @@ function input(parent,title,value,multi=false){const l=n('label',title),e=n(mult
 function details(parent,label){const d=n('details');d.append(n('summary',label));parent.append(d);return d;}
 function say(c,text){if(ctx===c)c.message.textContent=text;}
 async function act(fn){const c=ctx;if(!c||c.busy)return;c.busy=true;try{await fn(c);}catch(e){say(c,e.message);}finally{c.busy=false;}}
-async function save(c,next){const returned=await c.store.save(next);if(ctx!==c)return;c.state=returned;c.selected.clear();draw(c);say(c,'已保存，刷新后可以继续。');}
+async function save(c,next){const returned=await c.store.save(next);if(ctx!==c)return;c.state=returned;c.selected.clear();draw(c);say(c,'已保存，刷新后可以继续。');window.dispatchEvent(new Event('qa-review-changed'));}
 function draw(c){const h=c.host,s=c.state;h.replaceChildren();h.className='imports';h.append(n('h2','确认事实和写作规则'),n('p','核对原文后勾选事实；不确定的暂不采用。不会在本页生成问答。'));c.message=n('p');c.message.setAttribute('role','status');h.append(c.message);
  const imp=details(h,s.facts.length?'导入新的整理结果':'导入已整理的事实');imp.append(n('p','选择本项目交付的state.json。只接受能对应到本任务自家资料的候选事实；不会自动确认。'));const file=n('input');file.type='file';file.accept='.json';imp.append(file,btn('读取整理结果',async()=>{if(!file.files[0])throw Error('请选择整理结果文件');const candidate=JSON.parse(await file.files[0].text());if(candidate.simulation||candidate.product!==(c.task.asin||c.task.id)||!Array.isArray(candidate.facts))throw Error('这不是本产品的真实候选结果');if(s.facts.length)throw Error('本任务已有事实；请逐项修改，避免覆盖确认记录。');const sources=await c.store.sources();const imported=structuredClone(candidate);imported.task_id=c.task.id;imported.product=c.task.asin||c.task.id;imported.sources=sources;imported.facts_confirmation=imported.rules_confirmation=null;for(const f of imported.facts){const source=sources.find(x=>x.id===f.source_id&&x.current);if(f.provided_by!=='用户提供'){if(!source||source.product!==f.product||!source.original.includes(f.quote))throw Error('候选事实无法对应本任务当前原文：'+f.attribute);f.source_version=source.version;}f.status=f.status==='暂不采用'?'暂不采用':'待确认';f.confirmed_at=null;f.original_reviewed=false;}for(const r of imported.rules){r.status=r.status==='暂不采用'?'暂不采用':'待确认';r.confirmed_at=null;}await save(c,imported);}));
  const summary=n('p','目标产品：'+s.product+' / '+s.variant+' · 保存版本 '+s.revision);h.append(summary);const problemMap=new Map(C.problems(s).facts.map(x=>[x.id,x.problems]));
@@ -19,3 +19,4 @@ async function open(task,client,user){clear();if(!task||task.unsaved)return;cons
 function clear(){epoch++;if(ctx)ctx.host.replaceChildren();ctx=null;}
 window.QAReview={open,clear};
 })();
+

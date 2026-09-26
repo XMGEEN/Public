@@ -1,0 +1,17 @@
+(function(){
+'use strict';const Q=window.QAQuestionCore,el=(tag,text)=>{const x=document.createElement(tag);if(text!==undefined)x.textContent=text;return x;};let active=null;
+function button(label,fn){const b=el('button',label);b.type='button';b.onclick=()=>run(fn);return b;}
+async function run(fn){const c=active;if(!c||c.busy)return;c.busy=true;try{await fn(c);}catch(e){if(active===c)c.message.textContent=e.message;}finally{c.busy=false;}}
+function field(host,label,value){const l=el('label',label),i=el('textarea');i.value=value||'';l.append(i);host.append(l);return i;}
+async function save(c,next){const saved=await c.store.save(next);if(active!==c)return;c.state=saved||next;draw(c);c.message.textContent='已保存当前清单。';}
+function draw(c){const h=c.host,s=c.state;h.replaceChildren();h.append(el('h2','选择想回答的问题'));if(s.simulation)h.append(el('p','本地模拟：仅验证流程，不是真实分析结果，也不会生成答案。'));c.message=el('p');c.message.setAttribute('role','status');h.append(c.message);const n=Q.counts(s);h.append(el('p',`目标 ${n.target} 组 · 已选 ${n.selected} 组 · 可生成 ${n.generatable} 组`));
+h.append(button(s.questions.length?'重新生成建议问题':'生成建议问题',async()=>{if(s.questions.length&&!window.confirm('重新生成成功后会替换当前列表和选择，是否继续？'))return;c.message.textContent='正在处理，旧清单保留，请勿重复提交…';const result=await c.generate(c.context);const next=result.state||Q.replace(s,result.items,c.context,{allowReplace:true,assessments:result.assessments});if(next.task_id!==s.task_id)throw Error('后台结果不属于本任务');await save(c,next);}));
+for(const q of s.questions){const box=el('article');box.className='question-item source-item';box.dataset.questionId=q.id;const label=el('label'),cb=el('input');cb.type='checkbox';cb.checked=q.selected;cb.onchange=()=>run(()=>save(c,Q.select(s,q.id,cb.checked)));label.append(cb,document.createTextNode(q.content.en+' · '+q.content.zh));box.append(label,el('p',q.answerability.status+(q.answerability.missing?'：'+q.answerability.missing:'')),el('p',q.reason.text),el('p','来源：'+q.reason.sources.map(x=>x.type+(x.id?' · '+x.id:'')).join('；')),el('p','依据：'+(q.facts.map(x=>x.id+'；条件：'+x.conditions).join(' / ')||'待检查')));const d=el('details');d.append(el('summary','修改问题'));const en=field(d,'英文问题',q.content.en),zh=field(d,'中文对照',q.content.zh);d.append(button('保存问题修改',()=>save(c,Q.edit(s,q.id,{en:en.value,zh:zh.value}))));box.append(d);h.append(box);}
+const add=el('details');add.append(el('summary','手动新增问题'));const en=field(add,'新问题（英文）',''),zh=field(add,'新问题（中文）','');add.append(button('添加问题',()=>save(c,Q.add(s,{en:en.value,zh:zh.value},c.context))));h.append(add);
+const dup=Q.duplicates(s.questions);if(dup.length)h.append(el('p','发现明显重复问题，请修改后确认。'));if(s.needs_recheck)h.append(el('p','事实或规则已更新，需要重新检查并确认。'));
+h.append(button('检查新增或修改的问题',async()=>{const results=await c.recheck(s.questions,c.context);await save(c,Q.recheck(s,c.context,results));}),button('确认本次选择',()=>save(c,Q.confirm(s,c.context))));h.append(el('p',s.confirmation?'本次选择已确认；待补问题不会进入答案生成。':'尚未确认本次选择。'));
+}
+async function open({host,context,store,generate,recheck,simulation=false}){if(active)active.host.replaceChildren();const c={host,context,store,generate,recheck,busy:false};active=c;host.textContent='正在读取问题清单…';try{const saved=await store.load();if(active!==c)return;c.state=saved?Q.updateContext(saved,context):Q.blank(context,simulation);draw(c);}catch(e){host.textContent=e.message;}}
+function clear(){if(active)active.host.replaceChildren();active=null;}
+window.QAQuestionUI={open,clear};
+})();
