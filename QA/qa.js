@@ -11,7 +11,7 @@
  const client=window.supabase.createClient(C.supabaseUrl,C.publishableKey,{auth:{storageKey:'keyword-battle-auth',persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
  let user=null,epoch=0,active=null,saving=false,loading=false,offset=0;
  const columns='id,product_name,asin,qa_count,market,output_language,status,report_file_path,created_at,updated_at';
- function hide(){epoch++;user=null;$('protected-content').hidden=true;$('logout').hidden=true;$('account').textContent='';if($('task-list'))$('task-list').replaceChildren();if($('draft-form'))$('draft-form').reset();if($('report-title'))$('report-title').textContent='结果展示待开放';}
+ function hide(){window.QAImports?.clear();epoch++;user=null;$('protected-content').hidden=true;$('logout').hidden=true;$('account').textContent='';if($('task-list'))$('task-list').replaceChildren();if($('draft-form'))$('draft-form').reset();if($('report-title'))$('report-title').textContent='结果展示待开放';}
  function leave(){hide();location.replace(login);}
  function friendly(){return '操作未完成，请检查网络后重试；若仍失败，请联系管理员核对 QA 配置。';}
  async function requireSession(){const {data,error}=await client.auth.getSession();if(error||!data.session||!user||data.session.user.id!==user.id){leave();throw Error('AUTH_REQUIRED');}return epoch;}
@@ -19,7 +19,7 @@
  window.addEventListener('pagehide',hide);
  window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
  const node=(tag,text)=>{const n=document.createElement(tag);n.textContent=text;return n;};
- function edit(task){active=task;$('editor').hidden=false;$('product-name').value=task?.product_name||'';$('asin').value=task?.asin||'';$('qa-count').value=task?.qa_count||5;$('save-state').textContent=task?.updated_at?'已保存 · '+new Date(task.updated_at).toLocaleString('zh-CN'):'尚未保存';history.replaceState(null,'',task?'/QA/?task='+task.id:'/QA/');$('product-name').focus();}
+ function edit(task){active=task;$('editor').hidden=false;$('product-name').value=task?.product_name||'';$('asin').value=task?.asin||'';$('qa-count').value=task?.qa_count||5;$('save-state').textContent=task?.updated_at?'已保存 · '+new Date(task.updated_at).toLocaleString('zh-CN'):'尚未保存';history.replaceState(null,'',task?'/QA/?task='+task.id:'/QA/');$('product-name').focus();window.QAImports?.open(task,client,user);}
  async function load(append=false){
   if(loading)return;loading=true;$('refresh').disabled=true;
   try{const stamp=await requireSession();const start=append?offset:0;
@@ -38,7 +38,7 @@
    // 同一草稿 UUID 在响应丢失后重试，先读回，避免创建重复行。
    const existing=await client.from('qa_tasks').select('id').eq('id',active.id).maybeSingle();if(existing.error)throw existing.error;if(stamp!==epoch)return;
    const query=existing.data?client.from('qa_tasks').update(payload).eq('id',active.id):client.from('qa_tasks').insert({id:active.id,...payload});
-   const {data,error}=await query.select(columns).single();if(error)throw error;if(stamp!==epoch)return;active=data;history.replaceState(null,'','/QA/?task='+data.id);$('save-state').textContent='已保存 · '+new Date(data.updated_at).toLocaleString('zh-CN');message('已保存。资料准备好后再生成问答。');await load();
+   const {data,error}=await query.select(columns).single();if(error)throw error;if(stamp!==epoch)return;active=data;history.replaceState(null,'','/QA/?task='+data.id);$('save-state').textContent='已保存 · '+new Date(data.updated_at).toLocaleString('zh-CN');message('已保存。资料准备好后再生成问答。');window.QAImports?.open(data,client,user);await load();
   }catch(e){if(user)message(friendly());}finally{saving=false;controls.forEach(c=>{if(c.id!=='')c.disabled=false;});$('new-task').disabled=$('close-editor').disabled=false;}
  }
  async function start(){
