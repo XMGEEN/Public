@@ -4,6 +4,7 @@ import {flowNotice,flowActive,searchFromReceipts} from './report-flow-view.mjs';
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=x=>x===null||x===undefined?'—':Number(x).toLocaleString('en-US',{maximumFractionDigits:2});
 const pct=x=>x===null||x===undefined?'—':fmt(x)+'%';
+const adsCoverage=ext=>ext?.exclusions?.length?`<p class="muted">混合父体整组排除 ${ext.exclusions.length} 组；${ext.selection.filter(s=>s.shortage>0).map(s=>`${esc(s.type_name)}：有效${s.collected}组，缺${s.shortage}组`).join('；')}。</p>`:'';
 const labels=['父体列表与标签','产品类型定义','搜索量需求趋势','销量与销售额趋势','品牌占比与销售额','链接销量占比','价格段分布','广告流量占比','评分占比','上架趋势','卖家所属地','BuyBox 类型','AI 解读与市场方向建议'];
 const table=(headers,rows)=>`<div class="table-wrap"><table><thead><tr>${headers.map(x=>`<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 function rankedTable(group,kind){
@@ -28,7 +29,7 @@ export function frozenReport(data,images){
   add(5,plot(c.brands.map(x=>x.label),c.brands.map(x=>x.sales_share),{line:c.brands.map(x=>x.revenue.value),left:'销量占比（%）',right:'销售额（'+c.currency+'）',percent:true}));
   add(6,plot(c.links.map(x=>x.label),c.links.map(x=>x.sales_share),{left:'销量占比（%）',percent:true}));
   add(7,['all','type','age'].map(k=>c.price[k].map(g=>`<div class="print-table-group ${g.items.length>6?'price-wide':''}"><h3>${esc(g.label)}</h3>${priceTable(g)}</div>`).join('')).join(''));
-  add(8,adsPanel(ext,{view:'type',rows:c.rows})+adsPanel(ext,{view:'age',rows:c.rows}));
+  add(8,adsCoverage(ext)+adsPanel(ext,{view:'type',rows:c.rows})+adsPanel(ext,{view:'age',rows:c.rows}));
   add(9,['all','new','type'].map(k=>c.rating[k].map(g=>`<div class="print-table-group"><h3>${esc(g.label)}</h3>${ratingTable(g)}</div>`).join('')).join(''));
   add(10,plot(c.launch.map(x=>x.label),c.launch.map(x=>x.count),{left:'产品数量（组）'}));
   add(11,plot(c.sellers.map(x=>x.label),c.sellers.map(x=>x.count),{line:c.sellers.map(x=>x.sales_share),left:'产品数量（组）',right:'销量占比（%）'}));
@@ -100,7 +101,7 @@ export async function mountStatistics(root,task,client,alive){
   section(6,plot(c.links.map(x=>x.label),c.links.map(x=>x.sales_share),{left:'销量占比（%）',percent:true}));
   const tabs=(kind,choices,current)=>`<div class="stat-tabs">${choices.map(([value,label])=>`<button data-${kind}="${value}" aria-pressed="${current===value}">${label}</button>`).join('')}</div>`;
   section(7,tabs('price',[['all','整体市场'],['type','产品类型'],['age','新品 / 老品']],price)+c.price[price].map(g=>`<div class="print-table-group ${g.items.length>6?'price-wide':''}"><h3>${esc(g.label)}</h3>${priceTable(g)}</div>`).join(''));
-  section(8,flowNotice(flow,'ads',!!ext?.parents?.length)+adsPanel(ext,{view:adsView,rows:c.rows}));
+  section(8,flowNotice(flow,'ads',!!ext?.parents?.length)+adsCoverage(ext)+adsPanel(ext,{view:adsView,rows:c.rows}));
   section(9,tabs('rating',[['all','整体评分'],['new','新品评分'],['type','产品类型评分']],rating)+c.rating[rating].map(g=>`<div class="print-table-group"><h3>${esc(g.label)}</h3>${ratingTable(g)}</div>`).join(''));
   section(10,plot(c.launch.map(x=>x.label),c.launch.map(x=>x.count),{left:'产品数量（组）'}));
   section(11,plot(c.sellers.map(x=>x.label),c.sellers.map(x=>x.count),{line:c.sellers.map(x=>x.sales_share),left:'产品数量（组）',right:'销量占比（%）'}));
