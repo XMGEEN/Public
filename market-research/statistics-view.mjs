@@ -4,7 +4,7 @@ import {flowNotice,flowActive,searchFromReceipts} from './report-flow-view.mjs';
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=x=>x===null||x===undefined?'—':Number(x).toLocaleString('en-US',{maximumFractionDigits:2});
 const pct=x=>x===null||x===undefined?'—':fmt(x)+'%';
-const adsCoverage=ext=>ext?.exclusions?.length?`<p class="muted">混合父体整组排除 ${ext.exclusions.length} 组；${ext.selection.filter(s=>s.shortage>0).map(s=>`${esc(s.type_name)}：有效${s.collected}组，缺${s.shortage}组`).join('；')}。</p>`:'';
+const adsCoverage=ext=>ext?.exclusions?.length?`<p class="muted">混合或维度未确认的候选整组排除 ${ext.exclusions.length} 组；${ext.selection.filter(s=>s.shortage>0).map(s=>`${esc(s.type_name)}：有效${s.collected}组，缺${s.shortage}组`).join('；')}。</p>`:'';
 const labels=['父体列表与标签','产品类型定义','搜索量需求趋势','销量与销售额趋势','品牌占比与销售额','链接销量占比','价格段分布','广告流量占比','评分占比','上架趋势','卖家所属地','BuyBox 类型','AI 解读与市场方向建议'];
 const table=(headers,rows)=>`<div class="table-wrap"><table><thead><tr>${headers.map(x=>`<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 function rankedTable(group,kind){
