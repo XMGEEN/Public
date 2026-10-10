@@ -80,6 +80,6 @@ export function adsPanel(country,{view='type',rows:confirmedRows=[]}={}){
   return `<div class="external-ad-group"><h3>${esc(g.type_name)}</h3>${rows.map(p=>{
    const complete=p.complete&&known(p.ad_share)&&known(p.organic_share);
    return `<article class="external-parent" data-external-parent="${esc(p.parent)}"><div class="external-parent-heading"><strong>${esc(p.parent)}</strong></div>${complete?`<div class="external-ad-bar" role="img" aria-label="${esc(p.parent)} 自然${pct(p.organic_share)}，广告${pct(p.ad_share)}"><span class="natural" style="width:${p.organic_share*100}%"></span><span class="advertising" style="width:${p.ad_share*100}%"></span></div><div class="external-ad-values"><span>${pct(p.organic_share)}</span><span>${pct(p.ad_share)}</span></div>`:`<p class="muted">${p.state==='zero_total'?'暂无有效占比':'子体数据未完整'}</p>`}</article>`;
-  }).join('')}${rows.length<Math.min(g.target,g.available)?'<p class="muted">替换样本待补查</p>':''}</div>`;
+    }).join('')}${rows.length<Math.min(g.target,g.available)?`<p class="muted">${country.exclusions?.some(x=>x.type_id===g.type_id)?'有效广告样本不足':'替换样本待补查'}</p>`:''}</div>`;
  }).join('')}</div>`;
 }
