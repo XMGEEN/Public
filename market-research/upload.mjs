@@ -1,0 +1,21 @@
+export const BUCKET='market-research-inbox',MIME='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+export const PARSE_ERRORS={NOT_XLSX:'文件不是有效的Excel工作簿，请选择.xlsx文件。',HASH_MISMATCH:'文件校验不一致，请重新选择原文件上传。',FILE_SIZE_LIMIT:'文件超过30 MiB限制。',ARCHIVE_LIMIT:'工作簿解压后过大，请缩小数据范围后重新导出。',ACTIVE_CONTENT_NOT_ALLOWED:'文件含宏或嵌入对象，请导出不含宏的.xlsx。',PRODUCT_SHEET_MISSING:'产品信息文件缺少包含ASIN和父ASIN的工作表。',PRODUCT_SHEET_AMBIGUOUS:'产品信息文件有多个匹配工作表，请保留需要导入的工作表后重新上传。',HEADER_MISSING:'工作表缺少ASIN或父ASIN列，请核对文件类型。',HEADER_AMBIGUOUS:'ASIN表头重复，无法确定读取列。',HISTORY_SHEET_MISSING:'历史文件需包含产品历史月销量、产品历史月销售额、产品历史月价格三个子表。',COUNTRY_MISMATCH:'文件站点与所选国家不一致，请重新选择文件。',CURRENCY_MISMATCH:'文件币种与所选站点不一致，请核对。',COUNTRY_UNSUPPORTED:'当前站点尚不支持此文件格式。',MONTH_COLUMNS_MISSING:'历史表未识别出年月列，请保留YYYY-MM表头。',MONTH_DUPLICATE:'历史表存在重复月份，请检查表头。',ROW_LIMIT:'数据超过5000行限制，请缩小导出范围。',COLUMN_LIMIT:'工作簿超过256列限制。',IMAGE_PIXEL_LIMIT:'文件中有图片超过2000万像素。',IMAGE_COUNT_LIMIT:'工作簿图片超过2000张。',XML_PART_LIMIT:'单个工作表内容过大，请缩小导出范围。',PARSED_RESULT_LIMIT:'解析结果过大，请缩小文件范围。',LEASE_EXPIRED:'导入连接中断，可重试导入。'};
+export function parseMessage(code){return PARSE_ERRORS[code]||'文件未能完成解析，请检查工作簿结构并重新上传。';}
+export async function fileInfo(file){if(!file||!file.name.toLowerCase().endsWith('.xlsx'))throw Error('请为每个国家选择两份.xlsx文件。');if(!file.size||file.size>30*1024*1024)throw Error('每个文件需大于0且不超过30 MiB。');const b=await file.arrayBuffer();if(new Uint8Array(b)[0]!==80||new Uint8Array(b)[1]!==75)throw Error('文件不是有效的.xlsx工作簿。');return {filename:file.name,bytes:file.size,sha256:await hash(b)};}
+async function hash(b){return [...new Uint8Array(await crypto.subtle.digest('SHA-256',b))].map(x=>x.toString(16).padStart(2,'0')).join('');}
+export function uploadAPI(client){async function rpc(name,args){const {data,error}=await client.rpc(name,args);if(error)throw error;return data;}return {
+ async sources(id){const {data,error}=await client.from('market_sources').select('*').eq('task_id',id).eq('active',true).order('country').order('kind');if(error)throw error;return data;},
+ async results(id,revision){const {data,error}=await client.from('market_imports').select('*').eq('task_id',id).eq('input_revision',revision).order('country');if(error)throw error;return data;},
+ async jobs(id){const {data,error}=await client.from('market_jobs').select('id,status,error_code,input_revision,created_at').eq('task_id',id).eq('stage','import').order('created_at',{ascending:false}).limit(1);if(error)throw error;return data;},
+ async upload(task,country,kind,file,info){const s=await rpc('market_reserve_source',{p_task:task,p_id:crypto.randomUUID(),p_country:country,p_kind:kind,p_filename:info.filename,p_bytes:info.bytes,p_sha256:info.sha256});if(s.status==='uploaded')return s;
+  const bucket=client.storage.from(BUCKET);let original;
+  if(file){const {error}=await bucket.upload(s.raw_path,file,{upsert:false,contentType:MIME});if(error){const r=await bucket.download(s.raw_path);if(r.error)throw error;original=r.data;}}
+  else {const r=await bucket.download(s.raw_path);if(r.error)throw Error('请重新选择文件：'+info.filename);original=r.data;}
+  if(original&&(original.size!==info.bytes||await hash(await original.arrayBuffer())!==info.sha256))throw Error('服务器原件与本次文件不一致，请重新核对。');
+  return rpc('market_finish_source',{p_source:s.id});},
+ async submit(id){return rpc('market_submit_import',{p_task:id});},
+ async original(path){const {data,error}=await client.storage.from(BUCKET).download(path);if(error)throw error;return data;},
+ async parsed(path){const {data,error}=await client.storage.from(BUCKET).download(path);if(error)throw error;return JSON.parse(await data.text());},
+ async image(path){const {data,error}=await client.storage.from(BUCKET).download(path);if(error)throw error;return URL.createObjectURL(data);}
+};}
+export const warningLabel={ASIN_INVALID:'ASIN格式异常',DUPLICATE_ASIN:'ASIN重复（原行均保留）',FORMULA_CACHED_ONLY:'公式只读取缓存结果',PRODUCT_COLUMN_MISSING:'缺少产品字段',HISTORY_VALUES_MISSING:'历史月份存在空值（保留缺失，不补0）',HISTORY_VALUE_INVALID:'历史数值异常',MONTH_GAPS:'月份不连续',HISTORY_UNMATCHED_PRODUCTS:'部分产品缺少历史记录',HISTORY_EXTRA_ASINS:'历史表含产品表以外的ASIN',IMAGE_ROW_UNMATCHED:'图片未关联到产品行',IMAGE_FORMAT_UNSUPPORTED:'图片格式暂不支持',PRODUCT_IMAGE_MISSING:'产品行没有可关联图片',COUNTRY_UNVERIFIED:'文件缺少可验证的站点标识',SOURCE_DATE_CONFIRM_REQUIRED:'需确认数据导出日期'};

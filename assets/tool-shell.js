@@ -6,6 +6,7 @@
     { id: 'keyword', label: '关键词作战台', mark: 'K', href: '/tool/', roots: ['/tool/', '/report/'] },
     { id: 'voc', label: 'VOC 用户洞察', mark: 'V', href: '/voc/', roots: ['/voc/'] },
     { id: 'listing', label: 'Listing生成', mark: 'L', href: '/listing/', roots: ['/listing/'] },
+    { id: 'market', label: '市场调研与开发', mark: 'M', href: '/market-research/', roots: ['/market-research/'] },
     { id: 'qa', label: 'QA 工具', mark: 'Q', href: '/QA/', roots: ['/QA/'] }
   ];
   const path = location.pathname.replace(/\/index\.html$/, '/');

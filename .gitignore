@@ -7,3 +7,9 @@
 *.pem
 *.key
 node_modules/
+
+# Protect project credentials and private acceptance data
+*密钥*
+**/*密钥*
+施工/
+**/施工/
