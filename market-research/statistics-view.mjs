@@ -69,6 +69,7 @@ export async function mountStatistics(root,task,client,alive){
     if(!external)try{const s=await client.from('market_external_calls').select('task_id,tool,state,actual_credits,reserved_credits,receipt').eq('task_id',task.id).eq('tool','get_keyword_aba_trends').eq('state','succeeded');if(valid()&&!s.error)searchPreview=searchFromReceipts(s.data,task);}catch{}
     try{const i=await client.from('market_interpretation_drafts').select('*').eq('task_id',task.id).maybeSingle();if(valid()&&!i.error&&i.data&&i.data.tag_version===v&&i.data.external_revision===externalRevision){interpretation=i.data;}}catch{}
     try{const f=await client.from('market_report_flows').select('status,phase,error_code').eq('task_id',task.id).eq('tag_version',v).maybeSingle();if(valid()&&!f.error)flow=f.data;}catch{}
+    try{const p=await client.from('market_report_policy').select('search_calls,search_credits,ads_credits,interpretation_calls,interpretation_cny').eq('enabled',true).maybeSingle();if(valid()&&!p.error&&p.data&&flow)flow={...flow,policy:p.data};}catch{}
     const signature=JSON.stringify([snapshot,externalRevision,searchPreview,interpretation?.revision,flow]);
     if(valid()&&signature!==renderSignature&&!root.querySelector('[contenteditable="true"],[data-autosave="saving"],[data-autosave="failed"]')){renderSignature=signature;render();}
     if(valid()&&flowActive(flow))timer=setTimeout(load,5000);

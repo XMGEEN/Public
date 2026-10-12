@@ -6,8 +6,9 @@ export function flowNotice(flow,phase,ready=false){
  if(!flow)text='后续自动流程待接入，尚未开始调用。';
  else if(flow.status==='paused')text=messages[flow.error_code]||'后续处理已暂停，请核对预算或失败回执。';
  else if(phase==='interpretation'&&flow.phase!=='interpretation')text='搜索与广告数据完成后，自动生成解读。';
- else if(flow.status==='waiting_budget')text=messages[flow.error_code]||messages.FLOW_AUTH_REQUIRED;
+ else if(flow.status==='waiting_budget')text=flow.policy&&flow.error_code==='FLOW_AUTH_REQUIRED'?'已启用自动预算，正在准备本任务授权…':messages[flow.error_code]||messages.FLOW_AUTH_REQUIRED;
  else text=phase==='interpretation'?'正在准备或生成AI解读…':'正在获取搜索趋势与广告流量…';
+ if(flow?.policy&&flow.status!=='paused'&&!(phase==='interpretation'&&flow.phase!=='interpretation'))text+=phase==='interpretation'?`（最多${flow.policy.interpretation_calls}次、${flow.policy.interpretation_cny}元）`:`（${phase==='ads'?'广告':'搜索'}上限${phase==='ads'?flow.policy.ads_credits:flow.policy.search_credits} Credits）`;
  return `<p class="section-note report-flow-status" role="status">${esc(text)}</p>`;
 }
 export const flowActive=flow=>!!flow&&['queued','running','waiting_budget'].includes(flow.status);
