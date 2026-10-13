@@ -14,12 +14,17 @@ function rankedTable(group,kind){
  return `<div class="table-wrap ${price?'price':'rating'}-table"><table><thead><tr><th>指标</th>${group.items.map(x=>`<th>${esc(x.label)}</th>`).join('')}</tr></thead><tbody><tr><th>${price?'销量':'数量'}</th>${group.items.map((x,i)=>`<td>${cell(fmt(value(x)),i)}</td>`).join('')}</tr><tr><th>${price?'销量占比':'数量占比'}</th>${group.items.map((x,i)=>`<td>${cell(pct(price?x.sales_share:x.share),i)}</td>`).join('')}</tr></tbody></table></div>`;
 }
 const priceTable=g=>rankedTable(g,'price');
+export function ratingGroups43(country){
+ const items=rows=>{const counts=[0,0,0,0];for(const r of rows){const raw=r.rating;const value=raw===null||raw===undefined||typeof raw==='boolean'||String(raw).trim()===''?NaN:Number(raw);const i=!Number.isFinite(value)||value<0||value>5?3:value<4?0:value<4.3?1:2;counts[i]++;}return ['低于4.0','4.0–<4.3','4.3–5.0','未知'].map((label,i)=>({label,count:counts[i],share:rows.length?counts[i]/rows.length*100:null}));};
+ const rows=country.rows;return {...country,rating:{all:[{label:'整体评分',items:items(rows)}],new:[{label:'新品评分',items:items(rows.filter(r=>r.age==='new'))}],type:country.types.filter(t=>rows.some(r=>r.type_id===t.id)).map(t=>({label:t.name,items:items(rows.filter(r=>r.type_id===t.id))}))}};
+}
 const ratingTable=g=>rankedTable(g,'rating');
 // Export consumes a frozen owner-authorized snapshot, never live business APIs.
 export function frozenReport(data,images){
  const snapshot=data.statistics.snapshot,external=data.external.snapshot,report=data.report;
  const image=(country,row)=>{const uri=images[country+':'+row?.images?.[0]?.file];return uri?`<img src="${esc(uri)}" alt="产品图片">`:'';};
- return snapshot.countries.map(c=>{
+ return snapshot.countries.map(source=>{
+  const c=ratingGroups43(source);
   const ext=external.countries.find(x=>x.country===c.country),sections=[];
   const add=(i,body)=>sections.push(`<section class="stat-section print-section" data-section="${i}"><h2>${String(i).padStart(2,'0')} ${esc(labels[i-1])}${i===13?' <small>仅供参考</small>':''}</h2>${body}</section>`);
   add(1,`<p class="print-collapsed">▸ 父体列表（${c.rows.length}）</p>`);
@@ -90,7 +95,7 @@ export async function mountStatistics(root,task,client,alive){
   const panel=root.parentElement;if(!panel)return;panel.classList.remove('report-ready');panel.querySelectorAll('.report-editor-fold').forEach(fold=>{const content=fold.querySelector('#sample-content,#tag-content');if(content)fold.replaceWith(content);});panel.querySelectorAll('.compact-grid button').forEach(b=>{b.disabled=true;b.onclick=null;});
  }
  function render(){
-  disposeImages();const c=snapshot.countries[site];if(!c){root.innerHTML='<p>暂无确认数据</p>';return;}
+  disposeImages();const source=snapshot.countries[site];const c=source?ratingGroups43(source):null;if(!c){root.innerHTML='<p>暂无确认数据</p>';return;}
   const panels=[];const section=(i,body)=>panels.push(`<section class="stat-section" id="stat-section-${i}" tabindex="-1"><h2><span>${String(i).padStart(2,'0')}</span> ${labels[i-1]}${i===13?' <small class="interpretation-subtitle muted">仅供参考</small>':''}</h2>${body}</section>`);
   section(1,`<details class="stat-products"><summary>父体产品列表（${c.rows.length}）</summary><div class="table-wrap"><table><thead><tr><th>图片</th><th>产品 / 父ASIN</th><th>类型</th><th>新老品</th><th>价格段</th><th>销量</th><th>全部字段</th></tr></thead><tbody>${c.rows.map((r,i)=>`<tr><td data-stat-image="${i}"></td><td>${esc(r.title||'标题缺失')}<small>${esc(r.parent)}</small></td><td>${esc(r.type_name)}</td><td>${esc({new:'新品',old:'老品',unknown:'未知'}[r.age])}</td><td>${esc(r.price_band?.label||'未知')}</td><td>${fmt(r.sales)}</td><td><details><summary>查看</summary>${table(['字段','原始值'],Object.entries(r.raw_fields).map(([k,v])=>[k,v===null?'—':v]))}</details></td></tr>`).join('')}</tbody></table></div></details>`);
   section(2,`<div class="stat-types">${c.types.map(t=>`<article><div data-stat-type="${esc(t.representative_id)}"></div><h3>${esc(t.name)}</h3><p>${esc(t.definition)}</p></article>`).join('')}</div>`);
