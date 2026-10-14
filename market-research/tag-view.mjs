@@ -3,17 +3,75 @@ import {mountTypePicker} from './tag-picker.mjs';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const messages={TAG_TYPE_REQUIRED:'请选择产品类型',TAG_WIDTH_REQUIRED:'请填写本币价格档宽',TAG_DUPLICATE_NAME:'类型名称重复，请统一命名',TAG_REPRESENTATIVE_INVALID:'代表产品须属于该类型',TAG_CONFIRM_BLOCKED:'请检查标签和类型定义',MARKET_TAG_SAMPLE_STALE:'样本版本已改变，请重新整理标签',MARKET_TAG_STALE:'标签版本已变化，请刷新核对',MARKET_TAG_LOCKED:'标签正在保存，请稍候',MARKET_TAG_WAIT_REVIEW:'标签正在整理，请稍候',MARKET_TAG_RETRY_LIMIT:'请联系维护人员核对失败原因'};
 export async function mountTags(root,task,client,alive,onStatus=()=>{}){
- let autoPreparedVersion=null,autoOp=null;
+ let autoPreparedVersion=null,autoOp=null,pendingPrepare=false,loadSequence=0,actionError=null;
  let draft,op,sampleVersion,edits={},dirty=false,busy=false,stopped=false,timer,site=0,page=0,filter="all",pendingConfirm=false,urls=[],pickers=[],generation=0;
  const key='market-tag-edit-'+task.id,q=s=>root.querySelector(s),valid=()=>!stopped&&alive();
  const read=async(table)=>{const r=await client.from(table).select('*').eq('task_id',task.id).order('updated_at',{ascending:false}).limit(1);if(r.error)throw r.error;return r.data?.[0];};
  const stash=()=>{dirty=true;try{sessionStorage.setItem(key,JSON.stringify({revision:draft.revision,sample_version:draft.sample_version,edits}));}catch{}if(q('#tag-note'))q('#tag-note').textContent='修改将在确认标签时保存。';};
- async function action(name){if(busy)return;busy=true;root.querySelectorAll('button,input,select,textarea').forEach(x=>x.disabled=true);try{const r=await client.rpc('market_request_tag',{p_task:task.id,p_action:name,p_revision:draft?.revision??null,p_edits:name==='save'?edits:null});if(r.error)throw r.error;sessionStorage.removeItem(key);await load();}catch(e){pendingConfirm=false;render();q('#tag-note').textContent=messages[e.message]||'请求未完成，请刷新核对。';}finally{busy=false;}}
- async function load(){clearTimeout(timer);if(dirty&&!busy){timer=setTimeout(load,2500);return;}try{const [d,o,sd,a]=await Promise.all([read('market_tag_drafts'),read('market_tag_operations'),read('market_sample_drafts'),autoAIState(client,task,'tag')]);autoOp=a;sampleVersion=sd?.confirmed_version;if(!valid())return;draft=d;op=o;edits=structuredClone(d?.edits||{});dirty=false;if(d?.status==='editing'&&!['queued','running'].includes(o?.status)){try{const local=JSON.parse(sessionStorage.getItem(key)||'null');if(local?.revision===d.revision&&local.sample_version===d.sample_version){edits=local.edits;dirty=JSON.stringify(edits)!==JSON.stringify(d.edits);}}catch{}}render();if(d&&d.sample_version===sampleVersion)onStatus(d.status==='confirmed'?'tags_confirmed':'awaiting_tags');if(pendingConfirm&&o?.status==='failed')pendingConfirm=false;if(pendingConfirm&&o?.status==='succeeded'&&d.preview_revision===d.revision){pendingConfirm=false;setTimeout(()=>valid()&&action('confirm'),0);}if(['queued','running'].includes(o?.status)||['queued','running'].includes(autoOp?.status))timer=setTimeout(load,2500);else if(sd?.status==='confirmed'&&(!d||d.sample_version!==sampleVersion)&&o?.status!=='failed'&&autoPreparedVersion!==sampleVersion){autoPreparedVersion=sampleVersion;timer=setTimeout(()=>{if(valid())action('prepare');},0);}}catch{if(valid())root.innerHTML='<p class="muted">标签服务暂时无法读取，请稍后刷新。</p>';}}
- function render(){root.dataset.tagState=draft?.status||'';pickers.splice(0).forEach(dispose=>dispose());const gen=++generation;urls.splice(0).forEach(URL.revokeObjectURL);root.innerHTML='<h2>标签与产品类型</h2><p id="tag-note" class="error" role="status"></p>';if(!draft||draft.sample_version!==sampleVersion){if(draft)q('#tag-note').textContent='样本已更新，请按新样本重新整理标签。';root.insertAdjacentHTML('beforeend','<button id="tag-prepare" class="primary">整理标签</button>');q('#tag-prepare').onclick=()=>action('prepare');return;}if(['queued','running'].includes(op?.status)){q('#tag-note').textContent='正在保存标签…';return;}if(draft.preview_revision!==draft.revision){q('#tag-note').textContent='标签需要重新整理。';root.insertAdjacentHTML('beforeend','<button id="tag-retry">重新整理</button>');q('#tag-retry').onclick=()=>action('save');return;}
+ const active=x=>['queued','running'].includes(x?.status);
+ const codeText=code=>/^[A-Z][A-Z0-9_]{2,100}$/.test(code||'')?`（${code}）`:'';
+ const failureMessage=code=>messages[code]||({MARKET_TAG_NOT_READY:'请先确认父体样本，再整理标签。',MARKET_SESSION_REQUIRED:'登录已失效，请重新登录。',MARKET_ACCESS_DENIED:'当前账号无法操作此任务。',LEASE_EXPIRED:'整理中断，处理租约已过期，请联系维护人员核对。',LEASE_LOST:'整理中断，请联系维护人员核对任务状态。',TAG_WIDTH_REQUIRED:'缺少有效价格档宽，请补充价格信息。'}[code])||('标签整理未完成，请联系维护人员核对。'+codeText(code));
+ function operationError(){return (op?.error_details?.length?op.error_details:[{code:op?.error_code}]).map(x=>[x.group||x.type_id||x.country,failureMessage(x.code)].filter(Boolean).join('：')).join('\n');}
+ function note(text,error=false){const el=q('#tag-note');if(el){el.className=error?'error':'muted';el.textContent=text;}}
+ function schedule(){clearTimeout(timer);if(valid())timer=setTimeout(load,2500);}
+ async function action(name){
+  if(busy||!valid()||(name==='prepare'&&(pendingPrepare||active(op))))return;
+  busy=true;actionError=null;if(name==='prepare')autoPreparedVersion=sampleVersion;clearTimeout(timer);loadSequence++;root.setAttribute('aria-busy','true');
+  root.querySelectorAll('button,input,select,textarea').forEach(x=>x.disabled=true);
+  note(name==='prepare'?'正在提交整理标签…':name==='confirm'?'正在提交标签确认…':'正在保存标签…');
+  try{
+   const r=await client.rpc('market_request_tag',{p_task:task.id,p_action:name,p_revision:draft?.revision??null,p_edits:name==='save'?edits:null});
+   if(r.error)throw r.error;if(!valid())return;
+   if(name==='prepare'){pendingPrepare=true;autoPreparedVersion=sampleVersion;}
+   sessionStorage.removeItem(key);await load(true);
+  }catch(e){
+   if(!valid())return;pendingConfirm=false;
+   if(name==='prepare'&&e.message==='MARKET_TAG_ALREADY_PREPARED'){pendingPrepare=true;autoPreparedVersion=sampleVersion;await load(true);}
+   else{actionError=failureMessage(e.message);render();note(actionError,true);schedule();}
+  }finally{busy=false;if(valid())root.setAttribute('aria-busy','false');}
+ }
+ async function load(force=false){
+  clearTimeout(timer);if(!valid())return;if((dirty||busy)&&!force){schedule();return;}
+  const sequence=++loadSequence;
+  try{
+   const [d,o,sd,a]=await Promise.all([read('market_tag_drafts'),read('market_tag_operations'),read('market_sample_drafts'),autoAIState(client,task,'tag',{throwOnError:true})]);
+   if(!valid()||sequence!==loadSequence)return;
+   // A user can start editing while the reads are in flight. Keep those edits.
+   if(dirty&&!force){schedule();return;}
+   if(active(o)||d?.revision!==draft?.revision||o?.id!==op?.id||o?.status!==op?.status)actionError=null;
+   autoOp=a;sampleVersion=sd?.confirmed_version;draft=d;op=o;
+   if((d&&d.sample_version===sampleVersion)||o?.status==='failed')pendingPrepare=false;
+   edits=structuredClone(d?.edits||{});dirty=false;
+   if(d?.status==='editing'&&!active(o)){try{const local=JSON.parse(sessionStorage.getItem(key)||'null');if(local?.revision===d.revision&&local.sample_version===d.sample_version){edits=local.edits;dirty=JSON.stringify(edits)!==JSON.stringify(d.edits);}}catch{}}
+   render();if(d&&d.sample_version===sampleVersion)onStatus(d.status==='confirmed'?'tags_confirmed':'awaiting_tags');
+   if(!valid())return;
+   if(pendingConfirm&&o?.status==='failed')pendingConfirm=false;
+   if(pendingConfirm&&o?.status==='succeeded'&&d?.preview_revision===d?.revision){pendingConfirm=false;setTimeout(()=>valid()&&action('confirm'),0);}
+   if(active(o)||active(autoOp)||pendingPrepare)schedule();
+   else if(sd?.status==='confirmed'&&(!d||d.sample_version!==sampleVersion)&&o?.status!=='failed'&&autoPreparedVersion!==sampleVersion){autoPreparedVersion=sampleVersion;timer=setTimeout(()=>{if(valid())action('prepare');},0);}
+  }catch{
+   if(!valid()||sequence!==loadSequence)return;
+   if(!q('#tag-note'))root.innerHTML='<h2>标签与产品类型</h2><p id="tag-note" role="status"></p>';
+   note('暂时无法读取标签进度，正在自动重连；已提交的任务不会因此重复提交。',true);schedule();
+  }
+ }
+ function render(){root.dataset.tagState=draft?.status||'';pickers.splice(0).forEach(dispose=>dispose());const gen=++generation;urls.splice(0).forEach(URL.revokeObjectURL);root.innerHTML='<h2>标签与产品类型</h2><p id="tag-note" class="error" role="status" aria-live="polite"></p>';
+ // Queue feedback must precede the missing-draft branch: prepare creates that draft.
+ if(active(op)||pendingPrepare){
+  const preparing=pendingPrepare||op?.kind==='prepare';
+  note(op?.status==='running'?(preparing?'正在整理标签初稿，完成后自动显示。':'正在保存标签，完成后自动显示。'):(preparing?'已提交，标签整理排队中，完成后自动显示。':'标签保存已提交，排队处理中。'));
+  root.insertAdjacentHTML('beforeend',`<button id="tag-processing" class="primary" disabled>${preparing?'正在整理标签…':'正在保存标签…'}</button>`);return;
+ }
+ if(!draft||draft.sample_version!==sampleVersion){
+  if(op?.status==='failed')note(operationError(),true);
+  else if(actionError)note(actionError,true);
+  else if(draft)note('样本已更新，请按新样本重新整理标签。');
+  root.insertAdjacentHTML('beforeend','<button id="tag-prepare" class="primary">整理标签</button>');q('#tag-prepare').onclick=()=>action('prepare');return;
+ }
+ if(draft.preview_revision!==draft.revision){note(op?.status==='failed'?operationError():'标签需要重新整理。',op?.status==='failed');root.insertAdjacentHTML('beforeend','<button id="tag-retry">重新整理</button>');q('#tag-retry').onclick=()=>action('save');return;}
  const locked=draft.status==='confirmed',countries=draft.preview.countries;site=Math.min(site,countries.length-1);const c=countries[site],types=[...new Set([...draft.preview.types.map(t=>t.id),...Object.keys(edits.types||{})])].map(id=>({...draft.preview.types.find(t=>t.id===id),id,...edits.types?.[id]}));const allRows=countries.flatMap(c=>c.rows);const typeOf=r=>Object.hasOwn(edits.groups?.[r.id]||{},'type_id')?edits.groups[r.id].type_id:r.type_id;const filtered=c.rows.filter(r=>filter==='all'||(filter==='unknown'?!typeOf(r):typeOf(r)===filter));page=Math.min(page,Math.max(0,Math.ceil(filtered.length/15)-1));const rows=filtered.slice(page*15,page*15+15);const aiAssignments=draft.baseline?.proposal?.assignments||[];
- q('#tag-note').textContent=autoAIMessage(autoOp);if(!['queued','running','paused'].includes(autoOp?.status)&&aiAssignments.length){const unresolved=allRows.filter(r=>!typeOf(r));q('#tag-note').className='muted';q('#tag-note').textContent=`已分类${allRows.length-unresolved.length}个，待确认${unresolved.length}个。`+(unresolved.length?'待确认项可在“未知”筛选中查看并调整；其他结果已保存。':'');}
- if(op?.status==='failed')q('#tag-note').textContent=(op.error_details||[{code:op.error_code}]).map(x=>[x.group||x.type_id||x.country,messages[x.code]||x.code].filter(Boolean).join('：')).join('\n');
+ note(autoOp?.status==='queued'?`标签初稿已建立，${allRows.length}个父体等待AI分类，完成后自动显示。`:autoOp?.status==='running'?`AI正在分类${allRows.length}个父体，结果保存后自动显示。`:autoAIMessage(autoOp)+(autoOp?.status==='paused'?codeText(autoOp.error_code):''),autoOp?.status==='paused');if(!['queued','running','paused'].includes(autoOp?.status)&&aiAssignments.length){const unresolved=allRows.filter(r=>!typeOf(r));q('#tag-note').className='muted';q('#tag-note').textContent=`已分类${allRows.length-unresolved.length}个，待确认${unresolved.length}个。`+(unresolved.length?'待确认项可在“未知”筛选中查看并调整；其他结果已保存。':'');}
+ if(op?.status==='failed')note(operationError(),true);else if(actionError)note(actionError,true);
  root.insertAdjacentHTML('beforeend',`<div class="actions tag-main-actions">${countries.length>1?`<select id="tag-country">${countries.map((x,i)=>`<option value="${i}" ${i===site?'selected':''}>${esc(x.country)}</option>`).join('')}</select>`:''}<label class="tag-status-filter" for="tag-filter">显示<select id="tag-filter"><option value="all" ${filter==='all'?'selected':''}>全部</option>${types.map(t=>`<option value="${esc(t.id)}" ${filter===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}<option value="unknown" ${filter==='unknown'?'selected':''}>未知</option></select></label>${locked?`<span class="badge">标签已确认 · 版本 ${draft.confirmed_version}</span><button id="tag-reopen">修改并形成新版本</button>`:'<button class="primary" id="tag-confirm">确认标签</button>'}</div>${!c.band_width?`<label>价格档宽（${esc(c.currency)}）<input id="tag-width" type="number" min="0.01" step="0.01" value="${esc(edits.widths?.[c.country]||'')}"></label>`:''}<div class="table-wrap"><table class="tag-table"><thead><tr><th>图片</th><th>产品 / 父ASIN</th><th>产品类型</th><th>新老品</th><th>价格段 ${esc(c.currency)}</th><th>依据</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td class="tag-image" data-image="${i}">—</td><td class="tag-product"><span class="tag-title" title="${esc(r.title||'标题缺失')}">${esc(r.title||'标题缺失')}</span><small>${esc(r.parent)}</small></td><td><select data-tag-row="${i}" ${locked?'disabled':''}><option value="">未知</option>${types.map(t=>`<option value="${esc(t.id)}" ${typeOf(r)===t.id?'selected':''}>${esc(t.parent_name?t.parent_name+' / '+t.name:t.name)}</option>`).join('')}</select>${edits.groups?.[r.id]?.locked||r.locked?'<small>人工修改已锁定</small>':''}</td><td>${{new:'新品',old:'老品',unknown:'未知'}[r.age]}<small>${esc(r.launch_date||'日期未知')}</small></td><td>${esc(r.price_band?.label||'未知')}</td><td>${esc(edits.groups?.[r.id]?.reason||r.reason)}</td></tr>`).join('')}</tbody></table></div><div class="row pager"><button id="tag-prev" ${page===0?'disabled':''}>上一页</button><span>第 ${page+1} / ${Math.max(1,Math.ceil(filtered.length/15))} 页</span><button id="tag-next" ${(page+1)*15>=filtered.length?'disabled':''}>下一页</button></div><details class="tag-definitions"><summary>产品类型定义（${types.length}）</summary><div class="table-wrap"><table><thead><tr><th>图片</th><th>类型</th><th>简要定义</th><th>代表产品</th></tr></thead><tbody>${types.map((t,i)=>`<tr data-type="${i}"><td class="tag-type-image">—</td><td><input data-field="parent_name" aria-label="上级类型" value="${esc(t.parent_name)}" ${locked?'disabled':''}><input data-field="name" aria-label="类型名称" value="${esc(t.name)}" ${locked?'disabled':''}></td><td><textarea data-field="definition" maxlength="180" ${locked?'disabled':''}>${esc(t.definition)}</textarea></td><td><select data-field="representative_id" ${locked?'disabled':''}>${allRows.map(r=>`<option value="${esc(r.id)}" ${r.id===t.representative_id?'selected':''}>${esc(r.parent)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>${locked?'':'<button id="tag-add-type">添加类型</button>'}</details>`);
  q('#tag-filter').onchange=e=>{filter=e.target.value;page=0;render();};
  q('#tag-country')?.addEventListener('change',e=>{site=Number(e.target.value);page=0;render();});q('#tag-prev').onclick=()=>{page--;render();};q('#tag-next').onclick=()=>{page++;render();};
@@ -25,5 +83,5 @@ export async function mountTags(root,task,client,alive,onStatus=()=>{}){
  q('#tag-add-type')?.addEventListener('click',()=>{const id='manual_'+crypto.randomUUID().replaceAll('-','');(edits.types??={})[id]={name:'新类型',parent_name:'',definition:'请填写类型定义',representative_id:allRows[0]?.id,locked:true};stash();render();});
  (async()=>{try{const response=await client.from('market_imports').select('country,image_prefix').eq('task_id',task.id).eq('input_revision',task.revision);if(response.error)return;const prefixes=Object.fromEntries(response.data.map(x=>[x.country,x.image_prefix]));const show=async(el,code,images)=>{if(!images?.length||!prefixes[code])return;const {data,error}=await client.storage.from('market-research-inbox').download(prefixes[code]+images[0].file);if(error||!valid()||generation!==gen)return;const url=URL.createObjectURL(data);urls.push(url);const img=document.createElement('img');img.src=url;img.alt='代表产品图片';el.replaceChildren(img);};await Promise.all([...root.querySelectorAll('[data-image]')].map(el=>show(el,c.country,rows[Number(el.dataset.image)].images)));for(const tr of root.querySelectorAll('[data-type]')){const t=types[Number(tr.dataset.type)],r=allRows.find(r=>r.id===t.representative_id);if(r)show(tr.querySelector('.tag-type-image'),r.id.split(':')[0],r.images);}}catch{}})();
  }
- await load();return ()=>{pickers.splice(0).forEach(dispose=>dispose());stopped=true;clearTimeout(timer);generation++;urls.splice(0).forEach(URL.revokeObjectURL);};
+ await load();return ()=>{pickers.splice(0).forEach(dispose=>dispose());stopped=true;loadSequence++;clearTimeout(timer);generation++;urls.splice(0).forEach(URL.revokeObjectURL);};
 }

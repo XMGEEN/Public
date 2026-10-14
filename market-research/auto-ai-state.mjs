@@ -1,6 +1,6 @@
-export async function autoAIState(client,task,purpose){
+export async function autoAIState(client,task,purpose,{throwOnError=false}={}){
  const r=await client.from('market_auto_ai_operations').select('status,error_code').eq('task_id',task.id).eq('input_revision',task.revision).eq('purpose',purpose).order('created_at',{ascending:false}).limit(1);
- if(r.error)return null;
+ if(r.error){if(throwOnError)throw r.error;return null;}
  const op=r.data?.[0];if(!op)return null;
  const policy=await client.from('market_auto_ai_policy').select('max_calls,max_cny').limit(1);
  return {...op,...(!policy.error&&policy.data?.[0]?policy.data[0]:{})};
