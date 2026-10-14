@@ -65,9 +65,9 @@ export function ageTraffic(country,confirmedRows=[]){
 }
 
 export function adsPanel(country,{view='type',rows:confirmedRows=[]}={}){
- const parents=country?.parents||[];if(!parents.length)return '<p class="muted">广告流量数据待接入</p>';
- const groups=country.selection||[];
- const toolbar=`<div class="stat-tabs">${[['type','产品类型'],['age','新品 / 老品']].map(([id,label])=>`<button type="button" data-external-ads="${id}" aria-pressed="${id===view}">${label}</button>`).join('')}</div>`;
+ const newIds=new Set(confirmedRows.filter(r=>r.age==='new').map(r=>r.id));const parents=(country?.parents||[]).filter(p=>newIds.has(p.sample_id));if(!parents.length)return '<p class="muted">暂无可用新品广告样本</p>';view='type';
+ const groups=(country.selection||[]).map(g=>({...g,target:6,available:confirmedRows.filter(r=>r.age==='new'&&r.type_id===g.type_id).length}));
+ const toolbar='';
  const anchor=reportingWindow(country);
  const periods=[...new Set(parents.filter(p=>p.country===country.country).map(p=>(alignedWindow(p.window,anchor)||[]).join('～')).filter(Boolean))];
  const legend=`<div class="external-legend"><span><i class="natural"></i>自然流量</span><span><i class="advertising"></i>广告流量</span><small class="muted">${esc(periods.join(' · '))}</small></div>`;
