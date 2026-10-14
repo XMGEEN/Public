@@ -26,11 +26,12 @@ export function frozenReport(data,images){
  return snapshot.countries.map(source=>{
   const c=ratingGroups43(source);
   const ext=external.countries.find(x=>x.country===c.country),sections=[];
-  const add=(i,body)=>sections.push(`<section class="stat-section print-section" data-section="${i}"><h2>${String(i).padStart(2,'0')} ${esc(labels[i-1])}${i===13?' <small>仅供参考</small>':''}</h2>${body}</section>`);
+  const add=(i,body)=>sections.push(`<section class="stat-section print-section" data-section="${i}"><h2>${i==='4a'?'04A':String(i).padStart(2,'0')} ${esc(i==='4a'?'各类型市场份额':labels[i-1])}${i===13?' <small>仅供参考</small>':''}</h2>${body}</section>`);
   add(1,`<p class="print-collapsed">▸ 父体列表（${c.rows.length}）</p>`);
   add(2,`<div class="stat-types">${c.types.map(t=>`<article>${image(c.country,c.rows.find(r=>r.id===t.representative_id))}<h3>${esc(t.name)}</h3><p>${esc(t.definition)}</p></article>`).join('')}</div>`);
   add(3,`<div class="print-search">${searchPanel(ext,{metric:'search_volume'})}</div>`);
   add(4,plot(c.trend.map(x=>x.month),c.trend.map(x=>x.sales.value),{line:c.trend.map(x=>x.revenue.value),left:'销量（件）',right:'销售额（'+c.currency+'）'}));
+  add('4a',typeMarketPanel(c));
   add(5,plot(c.brands.map(x=>x.label),c.brands.map(x=>x.sales_share),{line:c.brands.map(x=>x.revenue.value),left:'销量占比（%）',right:'销售额（'+c.currency+'）',percent:true}));
   add(6,plot(c.links.map(x=>x.label),c.links.map(x=>x.sales_share),{left:'销量占比（%）',percent:true}));
   add(7,['all','type','age'].map(k=>c.price[k].map(g=>`<div class="print-table-group ${g.items.length>6?'price-wide':''}"><h3>${esc(g.label)}</h3>${priceTable(g)}</div>`).join('')).join(''));
@@ -42,6 +43,16 @@ export function frozenReport(data,images){
   add(13,interpretationPanel({...report.snapshot,printAll:true,status:'confirmed',confirmed_version:report.version},c.country));
   return `<article class="print-country"><h1>${esc(c.country)} · 市场调研报告</h1><p>报告版本 ${esc(report.version)} · 样本 ${esc(report.sample_version)} · 标签 ${esc(report.tag_version)} · 外部结果 ${esc(report.external_revision)}</p>${sections.join('')}</article>`;
  }).join('');
+}
+export function typeMarketRows(country){
+ const num=x=>x===null||x===undefined||typeof x==='boolean'||String(x).trim()===''?null:Number.isFinite(Number(x))&&Number(x)>=0?Number(x):null;
+ const groups=new Map();const names=new Map(country.types.map(t=>[t.id,t.name]));
+ for(const row of country.rows){const id=row.type_id??'__unknown__';if(!groups.has(id))groups.set(id,{id,label:names.get(row.type_id)||row.type_name||'未知类型',sales:null,revenue:null,salesKnown:0,revenueKnown:0,total:0});const group=groups.get(id);group.total++;for(const key of ['sales','revenue']){const value=num(row[key]);if(value!==null){group[key]=(group[key]??0)+value;group[key+'Known']++;}}}
+ const result=[...groups.values()].sort((a,b)=>(b.sales??-1)-(a.sales??-1)||a.label.localeCompare(b.label));const sales=result.reduce((n,x)=>n+(x.sales??0),0),revenue=result.reduce((n,x)=>n+(x.revenue??0),0);
+ return result.map(x=>({...x,sales_share:x.sales!==null&&sales>0?x.sales/sales*100:null,revenue_share:x.revenue!==null&&revenue>0?x.revenue/revenue*100:null}));
+}
+function typeMarketPanel(country){
+ const rows=typeMarketRows(country);return `<p class="muted">统计月份：${esc(country.month)} · 柱状：销量 · 折线：销售额</p>`+plot(rows.map(x=>x.label),rows.map(x=>x.sales),{line:rows.map(x=>x.revenue),left:'销量（件）',right:'销售额（'+country.currency+'）'});
 }
 function plot(labels,bars,{line=null,left='数量',right='',percent=false}={}){
  const valid=x=>x!==null&&x!==undefined&&Number.isFinite(Number(x));
@@ -96,13 +107,14 @@ export async function mountStatistics(root,task,client,alive){
  }
  function render(){
   disposeImages();const source=snapshot.countries[site];const c=source?ratingGroups43(source):null;if(!c){root.innerHTML='<p>暂无确认数据</p>';return;}
-  const panels=[];const section=(i,body)=>panels.push(`<section class="stat-section" id="stat-section-${i}" tabindex="-1"><h2><span>${String(i).padStart(2,'0')}</span> ${labels[i-1]}${i===13?' <small class="interpretation-subtitle muted">仅供参考</small>':''}</h2>${body}</section>`);
+  const panels=[];const section=(i,body)=>panels.push(`<section class="stat-section" id="stat-section-${i}" tabindex="-1"><h2><span>${i==='4a'?'04A':String(i).padStart(2,'0')}</span> ${i==='4a'?'各类型市场份额':labels[i-1]}${i===13?' <small class="interpretation-subtitle muted">仅供参考</small>':''}</h2>${body}</section>`);
   section(1,`<details class="stat-products"><summary>父体产品列表（${c.rows.length}）</summary><div class="table-wrap"><table><thead><tr><th>图片</th><th>产品 / 父ASIN</th><th>类型</th><th>新老品</th><th>价格段</th><th>销量</th><th>全部字段</th></tr></thead><tbody>${c.rows.map((r,i)=>`<tr><td data-stat-image="${i}"></td><td>${esc(r.title||'标题缺失')}<small>${esc(r.parent)}</small></td><td>${esc(r.type_name)}</td><td>${esc({new:'新品',old:'老品',unknown:'未知'}[r.age])}</td><td>${esc(r.price_band?.label||'未知')}</td><td>${fmt(r.sales)}</td><td><details><summary>查看</summary>${table(['字段','原始值'],Object.entries(r.raw_fields).map(([k,v])=>[k,v===null?'—':v]))}</details></td></tr>`).join('')}</tbody></table></div></details>`);
   section(2,`<div class="stat-types">${c.types.map(t=>`<article><div data-stat-type="${esc(t.representative_id)}"></div><h3>${esc(t.name)}</h3><p>${esc(t.definition)}</p></article>`).join('')}</div>`);
   const ext=external?.countries?.find(x=>x.country===c.country);
   const searchExt=ext||searchPreview?.countries?.find(x=>x.country===c.country);
   section(3,flowNotice(flow,'search',!!searchExt?.search?.length)+searchPanel(searchExt,{metric:searchMetric}));
   section(4,plot(c.trend.map(x=>x.month),c.trend.map(x=>x.sales.value),{line:c.trend.map(x=>x.revenue.value),left:'销量（件）',right:'销售额（'+c.currency+'）'})+`<details><summary>查看数据（${c.trend.length}个完整月）</summary>${table(['月份','销量','销售额 '+c.currency],c.trend.map(x=>[x.month,fmt(x.sales.value),fmt(x.revenue.value)]))}</details>`);
+  section('4a',typeMarketPanel(c));
   section(5,plot(c.brands.map(x=>x.label),c.brands.map(x=>x.sales_share),{line:c.brands.map(x=>x.revenue.value),left:'销量占比（%）',right:'销售额（'+c.currency+'）',percent:true}));
   section(6,plot(c.links.map(x=>x.label),c.links.map(x=>x.sales_share),{left:'销量占比（%）',percent:true}));
   const tabs=(kind,choices,current)=>`<div class="stat-tabs">${choices.map(([value,label])=>`<button data-${kind}="${value}" aria-pressed="${current===value}">${label}</button>`).join('')}</div>`;
@@ -118,7 +130,10 @@ export async function mountStatistics(root,task,client,alive){
   root.querySelectorAll('[data-price]').forEach(b=>b.onclick=()=>{price=b.dataset.price;const y=window.scrollY;render();window.scrollTo(0,y);});root.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{rating=b.dataset.rating;const y=window.scrollY;render();window.scrollTo(0,y);});q('#stat-country')?.addEventListener('change',e=>{site=Number(e.target.value);render();});
   root.querySelectorAll('[data-series]').forEach(b=>b.onclick=()=>{const active=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',String(active));b.closest('.stat-plot').querySelectorAll('.stat-'+b.dataset.series).forEach(x=>x.style.visibility=active?'visible':'hidden');});
   root.querySelectorAll('svg [tabindex]').forEach(el=>{const show=()=>{el.closest('.stat-plot').querySelector('output').textContent=el.querySelector('title').textContent;};el.onpointerenter=show;el.onfocus=show;el.onclick=show;});
-  const nav=root.parentElement.querySelector('.compact-grid');nav?.querySelectorAll('button').forEach((b,i)=>{b.disabled=false;b.onclick=()=>{root.querySelectorAll('.stat-section').forEach(x=>x.classList.remove('stat-target'));const el=q('#stat-section-'+(i+1));el.classList.add('stat-target');el.focus({preventScroll:true});el.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});};});
+  const nav=root.parentElement.querySelector('.compact-grid');
+  if(nav&&!nav.querySelector('[data-section-id="4a"]')){nav.querySelectorAll('button').forEach((b,i)=>b.dataset.sectionId=String(i+1));const button=document.createElement('button');button.type='button';button.dataset.sectionId='4a';button.textContent='04A 各类型市场份额';nav.querySelectorAll('button')[3]?.after(button);}
+  nav?.querySelectorAll('button').forEach(b=>{b.disabled=false;b.onclick=()=>{root.querySelectorAll('.stat-section').forEach(x=>x.classList.remove('stat-target'));const el=q('#stat-section-'+b.dataset.sectionId);if(!el)return;el.classList.add('stat-target');el.focus({preventScroll:true});el.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});};});
+
   root.querySelectorAll('[data-external-metric]').forEach(b=>b.onclick=()=>{searchMetric=b.dataset.externalMetric;const y=window.scrollY;render();window.scrollTo(0,y);});
   root.querySelectorAll('[data-external-ads]').forEach(b=>b.onclick=()=>{adsView=b.dataset.externalAds;const y=window.scrollY;render();window.scrollTo(0,y);});
   root.querySelectorAll('[data-external-series]').forEach(b=>b.onclick=()=>{const active=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',String(active));b.closest('.stat-plot').querySelectorAll('[data-search-series="'+b.dataset.externalSeries+'"]').forEach(el=>{el.style.visibility=active?'visible':'hidden';});});
