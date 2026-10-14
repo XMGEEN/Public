@@ -68,7 +68,7 @@ function plot(labels,bars,{line=null,left='数量',right='',percent=false}={}){
  return `<div class="stat-plot"><div class="stat-legend"><button type="button" data-series="bars" aria-pressed="true">● ${esc(left)}</button>${line?`<button type="button" data-series="lines" aria-pressed="true">━ ${esc(right)}</button>`:''}</div><div class="stat-svg">${svg}</div><output class="stat-readout" aria-live="polite"></output></div>`;
 }
 export async function mountStatistics(root,task,client,alive){
- let stopped=false,timer,snapshot,external=null,searchPreview=null,interpretation=null,externalRevision=null,flow=null,renderSignature='',searchMetric='search_volume',adsView='type',site=0,price='all',rating='all',urls=[];
+ let stopped=false,timer,snapshot,external=null,searchPreview=null,interpretation=null,externalRevision=null,flow=null,renderSignature='',coreRenderSignature='',searchMetric='search_volume',adsView='type',site=0,price='all',rating='all',urls=[];
  const valid=()=>!stopped&&alive(),q=s=>root.querySelector(s);
  function disposeImages(){urls.splice(0).forEach(URL.revokeObjectURL);}
  async function load(){
@@ -80,20 +80,28 @@ export async function mountStatistics(root,task,client,alive){
    const v=d.data.confirmed_version;
    const [r,o]=await Promise.all([client.from('market_statistics').select('snapshot').eq('task_id',task.id).eq('tag_version',v).maybeSingle(),client.from('market_statistics_operations').select('status,error_code').eq('task_id',task.id).eq('tag_version',v).maybeSingle()]);if(r.error||o.error)throw r.error||o.error;if(!valid())return;
    if(r.data){snapshot=r.data.snapshot;compactEditors();
-    // External failures cannot erase or block the existing statistics report.
-    try{const e=await client.from('market_external_results').select('snapshot,revision').eq('task_id',task.id).eq('tag_version',v).order('revision',{ascending:false}).limit(1).maybeSingle();if(valid()&&!e.error&&e.data){external=e.data.snapshot;externalRevision=e.data.revision;}}catch{}
+    // Render core statistics before ancillary network requests complete.
+    const coreSignature=JSON.stringify(snapshot);if(coreSignature!==coreRenderSignature){if(coreRenderSignature){external=null;interpretation=null;externalRevision=null;flow=null;searchPreview=null;}coreRenderSignature=coreSignature;render();}
+    const settled=await Promise.allSettled([
+     client.from('market_external_results').select('snapshot,revision').eq('task_id',task.id).eq('tag_version',v).order('revision',{ascending:false}).limit(1).maybeSingle(),
+     client.from('market_interpretation_drafts').select('*').eq('task_id',task.id).maybeSingle(),
+     client.from('market_report_flows').select('status,phase,error_code').eq('task_id',task.id).eq('tag_version',v).maybeSingle(),
+     client.from('market_report_policy').select('search_calls,search_credits,ads_credits,interpretation_calls,interpretation_cny').eq('enabled',true).maybeSingle()
+    ]);
+    if(!valid())return;
+    const result=i=>settled[i].status==='fulfilled'&&!settled[i].value.error?settled[i].value.data:null;
+    const e=result(0);if(e){external=e.snapshot;externalRevision=e.revision;}
+    const i=result(1);if(i&&i.tag_version===v&&i.external_revision===externalRevision)interpretation=i;
+    flow=result(2)||flow;const policy=result(3);if(policy&&flow)flow={...flow,policy};
     if(!external)try{const s=await client.from('market_external_calls').select('task_id,tool,state,actual_credits,reserved_credits,receipt').eq('task_id',task.id).eq('tool','get_keyword_aba_trends').eq('state','succeeded');if(valid()&&!s.error)searchPreview=searchFromReceipts(s.data,task);}catch{}
-    try{const i=await client.from('market_interpretation_drafts').select('*').eq('task_id',task.id).maybeSingle();if(valid()&&!i.error&&i.data&&i.data.tag_version===v&&i.data.external_revision===externalRevision){interpretation=i.data;}}catch{}
-    try{const f=await client.from('market_report_flows').select('status,phase,error_code').eq('task_id',task.id).eq('tag_version',v).maybeSingle();if(valid()&&!f.error)flow=f.data;}catch{}
-    try{const p=await client.from('market_report_policy').select('search_calls,search_credits,ads_credits,interpretation_calls,interpretation_cny').eq('enabled',true).maybeSingle();if(valid()&&!p.error&&p.data&&flow)flow={...flow,policy:p.data};}catch{}
     const signature=JSON.stringify([snapshot,externalRevision,searchPreview,interpretation?.revision,flow]);
-    if(valid()&&signature!==renderSignature&&!root.querySelector('[contenteditable="true"],[data-autosave="saving"],[data-autosave="failed"]')){renderSignature=signature;render();}
+    if(valid()&&signature!==renderSignature&&!root.querySelector('[contenteditable="true"],[data-autosave="saving"],[data-autosave="failed"]')){renderSignature=signature;render([3,8,13]);}
     if(valid()&&flowActive(flow))timer=setTimeout(load,5000);
     return;}
    root.innerHTML=`<div class="section-note">${o.data?.status==='running'||o.data?.status==='queued'?'正在整理统计图表…':o.data?.status==='failed'?'统计未完成，请重试。':'标签已确认，可生成统计图表。'}</div>${!['queued','running'].includes(o.data?.status)?'<button id="stat-generate">生成统计图表</button>':''}`;
    q('#stat-generate')?.addEventListener('click',async()=>{q('#stat-generate').disabled=true;const r=await client.rpc('market_request_statistics',{p_task:task.id});if(!valid())return;if(r.error){root.innerHTML='<p class="error">统计请求未完成，请刷新核对。</p>';return;}load();});
    if(['queued','running'].includes(o.data?.status))timer=setTimeout(load,2500);
-  }catch{if(valid())root.innerHTML='<p class="muted">统计服务尚未接入。</p>';}
+  }catch{if(valid()&&!snapshot)root.innerHTML='<p class="muted">统计服务暂时无法读取，请稍后重试。</p>';if(valid())timer=setTimeout(load,5000);}
  }
  function compactEditors(){
   const panel=root.parentElement;panel.classList.add('report-ready');
@@ -103,10 +111,10 @@ export async function mountStatistics(root,task,client,alive){
   }
  }
  function restoreEditors(){
-  const panel=root.parentElement;if(!panel)return;panel.classList.remove('report-ready');panel.querySelectorAll('.report-editor-fold').forEach(fold=>{const content=fold.querySelector('#sample-content,#tag-content');if(content)fold.replaceWith(content);});panel.querySelectorAll('.compact-grid button').forEach(b=>{b.disabled=true;b.onclick=null;});
+  const panel=root.parentElement;if(!panel)return;panel.classList.remove('report-ready');panel.querySelectorAll('.report-editor-fold').forEach(fold=>{if(fold.dataset.lazyEditor)return;const content=fold.querySelector('#sample-content,#tag-content');if(content)fold.replaceWith(content);});panel.querySelectorAll('.compact-grid button').forEach(b=>{b.disabled=true;b.onclick=null;});
  }
- function render(){
-  disposeImages();const source=snapshot.countries[site];const c=source?ratingGroups43(source):null;if(!c){root.innerHTML='<p>暂无确认数据</p>';return;}
+ function render(only=null){
+  const scrollY=window.scrollY;if(!only)disposeImages();const source=snapshot.countries[site];const c=source?ratingGroups43(source):null;if(!c){root.innerHTML='<p>暂无确认数据</p>';return;}
   const panels=[];const section=(i,body)=>panels.push(`<section class="stat-section" id="stat-section-${i}" tabindex="-1"><h2><span>${i==='4a'?'04A':String(i).padStart(2,'0')}</span> ${i==='4a'?'各类型市场份额':labels[i-1]}${i===13?' <small class="interpretation-subtitle muted">仅供参考</small>':''}</h2>${body}</section>`);
   section(1,`<details class="stat-products"><summary>父体产品列表（${c.rows.length}）</summary><div class="table-wrap"><table><thead><tr><th>图片</th><th>产品 / 父ASIN</th><th>类型</th><th>新老品</th><th>价格段</th><th>销量</th><th>全部字段</th></tr></thead><tbody>${c.rows.map((r,i)=>`<tr><td data-stat-image="${i}"></td><td>${esc(r.title||'标题缺失')}<small>${esc(r.parent)}</small></td><td>${esc(r.type_name)}</td><td>${esc({new:'新品',old:'老品',unknown:'未知'}[r.age])}</td><td>${esc(r.price_band?.label||'未知')}</td><td>${fmt(r.sales)}</td><td><details><summary>查看</summary>${table(['字段','原始值'],Object.entries(r.raw_fields).map(([k,v])=>[k,v===null?'—':v]))}</details></td></tr>`).join('')}</tbody></table></div></details>`);
   section(2,`<div class="stat-types">${c.types.map(t=>`<article><div data-stat-type="${esc(t.representative_id)}"></div><h3>${esc(t.name)}</h3><p>${esc(t.definition)}</p></article>`).join('')}</div>`);
@@ -125,9 +133,12 @@ export async function mountStatistics(root,task,client,alive){
   section(11,plot(c.sellers.map(x=>x.label),c.sellers.map(x=>x.count),{line:c.sellers.map(x=>x.sales_share),left:'产品数量（组）',right:'销量占比（%）'}));
   section(12,plot(c.buybox.map(x=>x.label),c.buybox.map(x=>x.count),{left:'产品数量（组）'}));
   section(13,flowNotice(flow,'interpretation',!!interpretation?.blocks?.length)+interpretationPanel(interpretation,c.country));
+  if(only){const holder=document.createElement('div');holder.innerHTML=panels.join('');for(const id of only){const fresh=holder.querySelector('#stat-section-'+id),old=q('#stat-section-'+id);if(fresh&&old)old.replaceWith(fresh);}}
+  else {
   root.innerHTML=`${snapshot.countries.length>1?`<label>国家<select id="stat-country">${snapshot.countries.map((c,i)=>`<option value="${i}" ${i===site?'selected':''}>${esc(c.country)}</option>`).join('')}</select></label>`:''}${panels.join('')}`;
+  }
   bindInterpretation(q('#stat-section-13'),interpretation,client,task.id,async()=>{const r=await client.from('market_interpretation_drafts').select('*').eq('task_id',task.id).single();if(r.error)throw r.error;if(valid()){interpretation=r.data;render();}});
-  root.querySelectorAll('[data-price]').forEach(b=>b.onclick=()=>{price=b.dataset.price;const y=window.scrollY;render();window.scrollTo(0,y);});root.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{rating=b.dataset.rating;const y=window.scrollY;render();window.scrollTo(0,y);});q('#stat-country')?.addEventListener('change',e=>{site=Number(e.target.value);render();});
+  root.querySelectorAll('[data-price]').forEach(b=>b.onclick=()=>{price=b.dataset.price;const y=window.scrollY;render();window.scrollTo(0,y);});root.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{rating=b.dataset.rating;const y=window.scrollY;render();window.scrollTo(0,y);});if(!only)q('#stat-country')?.addEventListener('change',e=>{site=Number(e.target.value);render();});
   root.querySelectorAll('[data-series]').forEach(b=>b.onclick=()=>{const active=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',String(active));b.closest('.stat-plot').querySelectorAll('.stat-'+b.dataset.series).forEach(x=>x.style.visibility=active?'visible':'hidden');});
   root.querySelectorAll('svg [tabindex]').forEach(el=>{const show=()=>{el.closest('.stat-plot').querySelector('output').textContent=el.querySelector('title').textContent;};el.onpointerenter=show;el.onfocus=show;el.onclick=show;});
   const nav=root.parentElement.querySelector('.compact-grid');
@@ -137,7 +148,7 @@ export async function mountStatistics(root,task,client,alive){
   root.querySelectorAll('[data-external-metric]').forEach(b=>b.onclick=()=>{searchMetric=b.dataset.externalMetric;const y=window.scrollY;render();window.scrollTo(0,y);});
   root.querySelectorAll('[data-external-ads]').forEach(b=>b.onclick=()=>{adsView=b.dataset.externalAds;const y=window.scrollY;render();window.scrollTo(0,y);});
   root.querySelectorAll('[data-external-series]').forEach(b=>b.onclick=()=>{const active=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',String(active));b.closest('.stat-plot').querySelectorAll('[data-search-series="'+b.dataset.externalSeries+'"]').forEach(el=>{el.style.visibility=active?'visible':'hidden';});});
-  loadImages(c);
+  if(!only)loadImages(c);else window.scrollTo(window.scrollX,scrollY);
  }
  async function loadImages(c){const generation=root.firstElementChild;try{const r=await client.from('market_imports').select('image_prefix').eq('task_id',task.id).eq('input_revision',task.revision).eq('country',c.country).single();if(r.error)return;const display=async(el,row)=>{if(!row?.images?.length)return;const d=await client.storage.from('market-research-inbox').download(r.data.image_prefix+row.images[0].file);if(d.error||!valid()||generation!==root.firstElementChild)return;const url=URL.createObjectURL(d.data);urls.push(url);const img=document.createElement('img');img.src=url;img.alt='产品图片';el.replaceChildren(img);};await Promise.all([...root.querySelectorAll('[data-stat-type]')].map(el=>display(el,c.rows.find(x=>x.id===el.dataset.statType))));q('.stat-products').ontoggle=()=>{if(q('.stat-products').open)root.querySelectorAll('[data-stat-image]').forEach(el=>{if(!el.children.length)display(el,c.rows[Number(el.dataset.statImage)]);});};}catch{}}
  await load();return ()=>{stopped=true;clearTimeout(timer);disposeImages();restoreEditors();};
