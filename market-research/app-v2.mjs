@@ -1,4 +1,4 @@
-import {mountCompetitor} from './competitor-view.mjs?v=20261014-stage7-edit';
+import {mountCompetitor} from './competitor-view.mjs?v=20261015-selling-recovery1';
 let competitorDispose=()=>{};
 import {mountReport} from './report-view.mjs';
 import {mountExports} from './export-view.mjs';

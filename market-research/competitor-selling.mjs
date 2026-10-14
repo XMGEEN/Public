@@ -4,7 +4,7 @@ const missing={not_provided:'未提供',fetch_failed:'获取失败',not_mentione
 export function sellingPanel(saved,record,op,budget,targets,demands=[]){
  const states={queued:'等待独立工人',running:'卖点分析中',succeeded:'卖点分析完成',partial:'卖点部分完成',failed:'卖点分析失败',paused:'卖点分析暂停'};
  const progress=op?.result?.progress;
- let html=`<h3>卖点对比</h3><div class="competitor-runtime-row"><span role="status">${op?esc(states[op.status]||op.status):'尚未启动卖点分析'}${progress?' · 已完成 '+progress.completed+'/'+progress.total+'，失败 '+progress.failed+'，待处理 '+progress.remaining:''}${op?.error_code?' · '+esc(({SELLING_SELECTION_REQUIRED:'候选卖点取舍或归类待确认',SELLING_MERGE_SAMPLE_OMITTED:'归并遗漏样本项目，已暂停'})[op.error_code]||op.error_code):''}</span>${saved&&!op&&Number(budget?.max_calls)>0&&Number(budget?.max_cny)>0?'<button id="competitor-selling-start" class="primary">分析当前类型卖点</button>':''}</div>`;
+ let html=`<h3>卖点对比</h3><div class="competitor-runtime-row"><span role="status">${op?esc(states[op.status]||op.status):'尚未启动卖点分析'}${progress?' · 已完成 '+progress.completed+'/'+progress.total+'，失败 '+progress.failed+'，待处理 '+progress.remaining:''}${op?.error_code?' · '+esc(({SELLING_SELECTION_REQUIRED:'候选卖点取舍或归类待确认',SELLING_MERGE_SAMPLE_OMITTED:'归并遗漏样本项目，已暂停',SELLING_MERGE_UNASSIGNED_INVALID:'归并归类冲突，已暂停并保留提取结果'})[op.error_code]||op.error_code):''}</span>${saved&&!op&&Number(budget?.max_calls)>0&&Number(budget?.max_cny)>0?'<button id="competitor-selling-start" class="primary">分析当前类型卖点</button>':''}</div>`;
 
  if(!record&&op?.error_code==='SELLING_SELECTION_REQUIRED'){
   const needs=new Map(demands.map(d=>[d.id,d]));const candidates=[...(op.result?.candidate_points||[])].sort((a,b)=>{const x=needs.get(a.need_id)?.rank,y=needs.get(b.need_id)?.rank;return (x==null)-(y==null)||(x??0)-(y??0)}),pending=op.result?.unresolved_points||[];
@@ -38,7 +38,7 @@ export function sellingTableBody(saved,record,op,budget,targets,demands=[]){
  if(matrix){const sub=document.createElement('tr');sub.className='competitor-selling-heading';sub.innerHTML='<th scope="col">统一卖点 / 需求顺序</th>'+targets.map(t=>`<th scope="col">${esc(t.brand||'未提供')}</th>`).join('');body.append(sub);
  for(const row of [...matrix.rows].slice(1)){const rank=row.cells[0],name=row.cells[1];const cell=document.createElement('th');cell.scope='row';cell.className='competitor-selling-label';const marker=document.createElement('span');marker.className='competitor-need-rank';marker.textContent=rank.textContent+' · ';cell.append(marker,...name.childNodes);rank.remove();name.replaceWith(cell);body.append(row);}
  matrix.parentElement.remove();
- }else if(demands.length){for(const d of demands){const row=document.createElement('tr');row.innerHTML=`<th scope="row">${esc(d.rank??'新增改善')} · ${esc(d.name)}</th>${targets.map(()=>'<td>尚未分析</td>').join('')}`;body.append(row);}}
+ }
  for(const note of [...content.querySelectorAll('p')]){const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=targets.length+1;cell.append(note);row.append(cell);body.append(row);}
  return body;
 }
