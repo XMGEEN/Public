@@ -1,0 +1,60 @@
+/* Scoped report presentation; shared navigation and other tools retain their styles. */
+#app:has(#panel-competitor.competitor-report:not([hidden])){max-width:none;margin:22px auto;padding:0 24px 28px}
+#app>.panel:has(>#panel-competitor.competitor-report:not([hidden])){border:0;background:transparent;padding:0;margin-top:16px}
+.competitor-task-header{background:#fff;border:1px solid #dde5f0;border-radius:9px;padding:20px;margin-bottom:20px}
+.competitor-task-header .tabs{margin-top:17px;padding-bottom:9px}
+.competitor-report{font:14px/1.6 'Microsoft YaHei',system-ui,sans-serif;color:#243047;min-width:0}
+.competitor-report .competitor-card{background:#fff;border:1px solid #e3e8f0;border-radius:10px;padding:22px;margin:0 0 16px;min-width:0}
+.competitor-report h3{font-size:17px;margin:0 0 16px;color:#243047;line-height:1.5}
+.competitor-report h3 .muted{margin-left:6px;font-size:12px}
+.competitor-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:white;padding:18px;border-radius:10px;margin-bottom:12px}
+.competitor-controls label{margin:0;font-weight:400;white-space:nowrap}
+.competitor-controls select{width:auto;max-width:100%;min-width:200px;flex:0 1 auto;padding:8px 12px}
+.competitor-export{margin-left:auto;display:flex;gap:10px}
+.competitor-report .competitor-voc{padding:14px 18px}.competitor-voc h3{font-size:14px;margin-bottom:8px}
+.competitor-upload{display:flex;justify-content:space-between;align-items:center;gap:16px}.competitor-upload-info{min-width:0;overflow-wrap:anywhere}.competitor-upload-info strong{font-size:13px}.competitor-upload-info p{margin:3px 0 0}.competitor-upload-actions{display:flex;gap:10px;flex-shrink:0}
+.competitor-scroll{max-width:100%;overflow:auto;overscroll-behavior-x:contain}
+.competitor-report table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px;line-height:1.65}
+.competitor-report th,.competitor-report td{border:1px solid #e6eaf1;padding:12px;vertical-align:top;text-align:left;overflow-wrap:anywhere}
+.competitor-report th{background:#f7f9fd;color:#34435d;font-size:13px}.competitor-target-table th:first-child{width:145px}
+.competitor-target-table td{vertical-align:middle}.competitor-report [data-selling-field],.competitor-report [data-development-field]{white-space:pre-wrap;cursor:text;border-radius:3px;min-height:1.6em}
+.competitor-report [contenteditable=true]{outline:2px solid #8eaeed;outline-offset:3px;background:#f4f8ff}
+.competitor-runtime-row{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;font-size:12px;color:#6e7e96;margin:0 0 12px}.competitor-runtime-row:empty{display:none}
+.competitor-usage{font-size:12px;color:#6e7e96;margin:8px 0 12px}.competitor-usage summary{cursor:pointer;width:max-content}.competitor-usage p{margin:6px 0}.competitor-usage>span{display:block;margin-top:8px}
+.competitor-traffic .panel{border:1px solid #e6eaf1;border-radius:8px;padding:16px}.competitor-traffic-card>.competitor-runtime-row{margin:12px 0 0}
+.competitor-insights-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.competitor-insight-card{border:1px solid #e6eaf1;border-radius:8px;padding:16px;height:340px;min-width:0;display:flex;flex-direction:column}
+.competitor-insight-card h4{font-size:14px;margin:0 0 12px;flex-shrink:0}.competitor-insight-scroll{min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;padding-right:8px}
+.competitor-insight-item{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:6px 0}.competitor-insight-item>.muted{white-space:nowrap;flex-shrink:0}.competitor-insight-item>span:first-child{overflow-wrap:anywhere}
+@media(max-width:1000px) and (min-width:601px){.competitor-insights-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){#app:has(#panel-competitor.competitor-report:not([hidden])){padding:0 14px 20px;margin-top:16px}.competitor-task-header{padding:16px}.competitor-report .competitor-card{padding:16px}.competitor-controls{padding:14px;gap:10px}.competitor-controls select{flex:1;min-width:0}.competitor-export{width:100%;justify-content:flex-end}.competitor-upload{align-items:flex-start;flex-direction:column;gap:12px}.competitor-upload-actions{width:100%;justify-content:flex-end}.competitor-insights-grid{grid-template-columns:1fr}.competitor-report h3{font-size:16px}.competitor-report th,.competitor-report td{padding:10px}.competitor-insight-card{height:300px}}
+
+/* Unified product columns and blue section headings, matching the accepted screenshot. */
+.competitor-report .competitor-comparison-table{font-size:13px;line-height:1.6}
+.competitor-report .competitor-comparison-table th,.competitor-report .competitor-comparison-table td{padding:11px 10px;border-color:#e3e8f1;vertical-align:top}
+.competitor-comparison-table thead th{background:#f7f9fd}.competitor-comparison-table th[scope=row]{background:#f7f9fd;color:#26344b;font-weight:600}
+.competitor-report .competitor-section-title>th{background:#edf3ff;color:#345c9b;padding:9px 10px;font-weight:600}
+.competitor-section-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.competitor-section-heading>.competitor-runtime-row{margin:0;font-weight:400;font-size:11px}.competitor-section-heading button{padding:5px 10px;font-size:12px}
+.competitor-product-image{height:90px;background:#f3f5f9;border-radius:8px;margin:0 0 9px;display:flex;align-items:center;justify-content:center;font-weight:400;color:#7a8597;font-size:12px}.competitor-product-image img{mix-blend-mode:multiply}.competitor-product-asin{display:block;font-size:11px}
+.competitor-ad-bar{display:flex;height:11px;border-radius:6px;overflow:hidden;background:#ffbb65;margin:6px 0 8px}.competitor-ad-bar>span{display:block;height:100%}.competitor-organic{background:#6695ee}.competitor-advertising{background:#ffbb65}
+.competitor-ad-values{white-space:nowrap;font-size:12px}.competitor-ad-values>span{color:#447df1}.competitor-missing{color:#9b6d32;font-size:12px}
+.competitor-report .competitor-selling-label [data-selling-field]{display:inline;white-space:pre-wrap}.competitor-selling-label small[role=status]:empty{display:none}.competitor-report .competitor-selling-heading th{background:#f7f9fd;font-weight:600}
+
+/* Development table follows the compact column and priority badge reference. */
+.competitor-development-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.competitor-report .competitor-development-heading h3{margin:0}
+.competitor-development-meta{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin-left:auto;max-width:100%}
+.competitor-development-meta .competitor-runtime-row,.competitor-development-meta .competitor-usage{margin:0;font-size:11px}
+.competitor-development-meta .competitor-usage[open]{max-width:360px}
+.competitor-report .competitor-development-table{min-width:1455px;font-size:14px;line-height:1.6}
+.competitor-report .competitor-development-table th,.competitor-report .competitor-development-table td{padding:12px;border-color:#e3e8f1}
+.competitor-report .competitor-development-table th{font-size:13px;background:#f7f9fd}
+.competitor-development-direction [data-development-field]{font-weight:700}
+.competitor-report .competitor-priority-value:not([contenteditable=true]){display:inline-block;font-size:0;line-height:0;min-height:0;padding:3px 7px;border-radius:4px;background:#eef1f5;color:#596579;max-width:100%}
+.competitor-priority-value:not([contenteditable=true])::before{content:attr(data-priority-label);font-size:11px;line-height:1.6;white-space:normal}
+.competitor-report .competitor-priority-value[data-priority-tone=primary]:not([contenteditable=true]){background:#e7f2ef;color:#34715b}
+.competitor-report .competitor-priority-value[data-priority-tone=secondary]:not([contenteditable=true]){background:#eaf1ff;color:#3267e8}
+.competitor-report .competitor-priority-value[data-priority-tone=pending]:not([contenteditable=true]){background:#fff0de;color:#a57528}
+.competitor-report .competitor-priority-value[contenteditable=true]{font-size:13px;line-height:1.6;min-width:180px;position:relative;z-index:1;padding:7px;background:#f4f8ff}
+.competitor-development-table small[role=status]:empty{display:none}
