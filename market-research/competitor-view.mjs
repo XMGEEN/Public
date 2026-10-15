@@ -1,6 +1,6 @@
 import {mountExports} from './competitor-export.mjs?v=20261014-stage7-edit';
 import {mountDevelopment} from './competitor-development.mjs?v=20261014-stage7-edit';
-import {sellingTableBody,bindSelling} from './competitor-selling.mjs?v=20261015-selling-recovery1';
+import {sellingTableBody,bindSelling} from './competitor-selling.mjs?v=20261015-table-recovery1';
 import {cachedTraffic,trafficTableRows} from './competitor-traffic.mjs?v=20261014-stage7-edit';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export async function mountCompetitor(root,task,client,valid){
