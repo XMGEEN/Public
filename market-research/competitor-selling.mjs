@@ -1,6 +1,14 @@
 import {bindInlineText} from './competitor-inline-edit.mjs?v=20261014-stage7-edit';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const missing={not_provided:'未提供',fetch_failed:'获取失败',not_mentioned:'图文未提及'};
+export function sellingParameterText(item){
+ const value=item?.value;
+ const empty=value==null||(typeof value==='string'&&['','null'].includes(value.trim().toLowerCase()));
+ if(!empty)return value;
+ if(item?.status==='available'&&item?.present===true)return '已提及，未注明参数';
+ return missing[item?.status]??'未提供';
+}
+
 export function sellingPanel(saved,record,op,budget,targets,demands=[]){
  const states={queued:'等待独立工人',running:'卖点分析中',succeeded:'卖点分析完成',partial:'卖点部分完成',failed:'卖点分析失败',paused:'卖点分析暂停'};
  const progress=op?.result?.progress;
@@ -9,12 +17,12 @@ export function sellingPanel(saved,record,op,budget,targets,demands=[]){
  if(!record&&op?.error_code==='SELLING_SELECTION_REQUIRED'){
   const needs=new Map(demands.map(d=>[d.id,d]));const candidates=[...(op.result?.candidate_points||[])].sort((a,b)=>{const x=needs.get(a.need_id)?.rank,y=needs.get(b.need_id)?.rank;return (x==null)-(y==null)||(x??0)-(y??0)}),pending=op.result?.unresolved_points||[];
   html+='<p class="muted">候选已保存，尚未确定最终最多10项；待确认项目不作为已完成分析。</p>';
-  if(candidates.length)html+=`<div class="competitor-scroll"><table class="competitor-selling-candidates" style="min-width:1290px;width:100%;table-layout:fixed"><colgroup><col style="width:70px"><col style="width:220px">${targets.map(()=>'<col style="width:200px">').join('')}</colgroup><tr><th>需求排名</th><th>统一需求／候选卖点</th>${targets.map(t=>`<th>${esc(t.parent)}</th>`).join('')}</tr>${candidates.map(point=>`<tr><td>${needs.get(point.need_id)?.rank??'待排序'}</td><td>${needs.get(point.need_id)?.name===point.name?esc(point.name):esc(needs.get(point.need_id)?.name||'需求关联待确认')+'<br>'+esc(point.name)}</td>${targets.map(t=>{const product=op.result?.candidate_observations?.[t.parent],obs=product?.points?.[point.id];return `<td>${esc(obs?.value??(obs?'未提供':product?.inspection_complete?'图文未提及':'未提供'))}</td>`}).join('')}</tr>`).join('')}</table></div>`;
+  if(candidates.length)html+=`<div class="competitor-scroll"><table class="competitor-selling-candidates" style="min-width:1290px;width:100%;table-layout:fixed"><colgroup><col style="width:70px"><col style="width:220px">${targets.map(()=>'<col style="width:200px">').join('')}</colgroup><tr><th>需求排名</th><th>统一需求／候选卖点</th>${targets.map(t=>`<th>${esc(t.parent)}</th>`).join('')}</tr>${candidates.map(point=>`<tr><td>${needs.get(point.need_id)?.rank??'待排序'}</td><td>${needs.get(point.need_id)?.name===point.name?esc(point.name):esc(needs.get(point.need_id)?.name||'需求关联待确认')+'<br>'+esc(point.name)}</td>${targets.map(t=>{const product=op.result?.candidate_observations?.[t.parent],obs=product?.points?.[point.id];return `<td>${esc(sellingParameterText(obs??{status:product?.inspection_complete?'not_mentioned':'not_provided'}))}</td>`}).join('')}</tr>`).join('')}</table></div>`;
   return html;
  }
  if(!record)return html+'<p class="muted">'+(op?.error_code==='SELLING_SELECTION_REQUIRED'?'候选卖点超过已确认选择边界，完整候选已保存，需确认取舍。':'已完成商品进度单独保存；暂未生成可展示的卖点矩阵。')+'</p>';
  const rows=record.result.comparison.rows;
- html+=`<div class="competitor-scroll"><table class="competitor-selling-matrix" style="min-width:1290px;width:100%;table-layout:fixed"><colgroup><col style="width:70px"><col style="width:220px">${targets.map(()=>'<col style="width:200px">').join('')}</colgroup><tr><th>排名</th><th>统一需求／卖点</th>${targets.map(t=>`<th>${esc(t.brand||'未提供')}<br>${esc(t.parent)}</th>`).join('')}</tr>${rows.map(row=>`<tr><td>${row.rank??'待排序'}</td><td><div data-selling-field="${esc('point/'+row.point_id+'/name')}">${esc(row.point_name)}</div></td>${targets.map(t=>{const item=row.parameters[t.parent];return `<td><div data-selling-field="${esc('point/'+row.point_id+'/target/'+t.parent)}">${esc(item?.value??missing[item?.status]??'未提供')}</div></td>`}).join('')}</tr>`).join('')}</table></div>`;
+ html+=`<div class="competitor-scroll"><table class="competitor-selling-matrix" style="min-width:1290px;width:100%;table-layout:fixed"><colgroup><col style="width:70px"><col style="width:220px">${targets.map(()=>'<col style="width:200px">').join('')}</colgroup><tr><th>排名</th><th>统一需求／卖点</th>${targets.map(t=>`<th>${esc(t.brand||'未提供')}<br>${esc(t.parent)}</th>`).join('')}</tr>${rows.map(row=>`<tr><td>${row.rank??'待排序'}</td><td><div data-selling-field="${esc('point/'+row.point_id+'/name')}">${esc(row.point_name)}</div></td>${targets.map(t=>{const item=row.parameters[t.parent];return `<td><div data-selling-field="${esc('point/'+row.point_id+'/target/'+t.parent)}">${esc(sellingParameterText(item))}</div></td>`}).join('')}</tr>`).join('')}</table></div>`;
  const unmatched=record.result.comparison.needs_without_points||[];
  if(unmatched.length)html+=`<details class="competitor-unmatched"><summary>未匹配卖点的需求（${unmatched.length}项）</summary><ul class="competitor-unmatched-list" tabindex="0" aria-label="未匹配卖点的需求列表">${unmatched.map(d=>`<li>${esc(d.name)}</li>`).join('')}</ul></details>`;
  return html;
