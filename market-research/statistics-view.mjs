@@ -1,5 +1,5 @@
 import {searchPanel,adsPanel} from './external-view.mjs';
-import {interpretationPanel,bindInterpretation} from './interpretation-view.mjs';
+import {interpretationPanel,bindInterpretation,interpretationPending} from './interpretation-view.mjs?v=20261015-report-edit1';
 import {flowNotice,flowActive,searchFromReceipts} from './report-flow-view.mjs';
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=x=>x===null||x===undefined?'—':Number(x).toLocaleString('en-US',{maximumFractionDigits:2});
@@ -26,12 +26,13 @@ export function frozenReport(data,images){
  return snapshot.countries.map(source=>{
   const c=ratingGroups43(source);
   const ext=external.countries.find(x=>x.country===c.country),sections=[];
-  const add=(i,body)=>sections.push(`<section class="stat-section print-section" data-section="${i}"><h2>${i==='4a'?'04A':String(i).padStart(2,'0')} ${esc(i==='4a'?'各类型市场份额':labels[i-1])}${i===13?' <small>仅供参考</small>':''}</h2>${body}</section>`);
+  const add=(i,body)=>sections.push(`<section class="stat-section print-section" data-section="${i}"><h2>${i==='4a'?'04A':i==='4b'?'04B':String(i).padStart(2,'0')} ${esc(i==='4a'?'各类型销量与销售额趋势':i==='4b'?'各类型市场份额':labels[i-1])}${i===13?' <small>仅供参考</small>':''}</h2>${body}</section>`);
   add(1,`<p class="print-collapsed">▸ 父体列表（${c.rows.length}）</p>`);
   add(2,`<div class="stat-types">${c.types.map(t=>`<article>${image(c.country,c.rows.find(r=>r.id===t.representative_id))}<h3>${esc(t.name)}</h3><p>${esc(t.definition)}</p></article>`).join('')}</div>`);
   add(3,`<div class="print-search">${searchPanel(ext,{metric:'search_volume'})}</div>`);
   add(4,plot(c.trend.map(x=>x.month),c.trend.map(x=>x.sales.value),{line:c.trend.map(x=>x.revenue.value),left:'销量（件）',right:'销售额（'+c.currency+'）'}));
-  add('4a',typeMarketPanel(c));
+  add('4a',typeTrendRows(c).map(g=>`<div class="print-table-group"><h3>${esc(g.name)}</h3>${typeTrendPlot(c,g)}</div>`).join(''));
+  add('4b',typeMarketPanel(c));
   add(5,plot(c.brands.map(x=>x.label),c.brands.map(x=>x.sales_share),{line:c.brands.map(x=>x.revenue.value),left:'销量占比（%）',right:'销售额（'+c.currency+'）',percent:true}));
   add(6,plot(c.links.map(x=>x.label),c.links.map(x=>x.sales_share),{left:'销量占比（%）',percent:true}));
   add(7,['all','type','age'].map(k=>c.price[k].map(g=>`<div class="print-table-group ${g.items.length>6?'price-wide':''}"><h3>${esc(g.label)}</h3>${priceTable(g)}</div>`).join('')).join(''));
@@ -51,14 +52,25 @@ export function typeMarketRows(country){
  const result=[...groups.values()].sort((a,b)=>(b.sales??-1)-(a.sales??-1)||a.label.localeCompare(b.label));const sales=result.reduce((n,x)=>n+(x.sales??0),0),revenue=result.reduce((n,x)=>n+(x.revenue??0),0);
  return result.map(x=>({...x,sales_share:x.sales!==null&&sales>0?x.sales/sales*100:null,revenue_share:x.revenue!==null&&revenue>0?x.revenue/revenue*100:null}));
 }
+export function typeTrendRows(country){
+ const groups=new Map(),names=new Map(country.types.map(t=>[t.id,t.name]));
+ for(const r of country.rows){const id=r.type_id??'__unknown__';if(!groups.has(id))groups.set(id,{id,name:names.get(r.type_id)||r.type_name||'未知类型',rows:[]});groups.get(id).rows.push(r);}
+ const metric=(rows,key,month)=>{const values=rows.map(r=>r.history?.[key]?.[month]).filter(v=>v!==null&&v!==undefined&&typeof v!=='boolean'&&String(v).trim()!==''&&Number.isFinite(Number(v))&&Number(v)>=0).map(Number);return {value:values.length?values.reduce((a,b)=>a+b,0):null,known:values.length,total:rows.length};};
+ return [...groups.values()].map(g=>({id:g.id,name:g.name,trend:country.trend.map(m=>({month:m.month,sales:metric(g.rows,'sales',m.month),revenue:metric(g.rows,'revenue',m.month)}))}));
+}
+function typeTrendPlot(country,group){
+ if(!group)return '<p class="muted">暂无产品类型</p>';
+ return `<p class="muted">${esc(group.name)} · 柱状：销量 · 折线：销售额</p>`+plot(group.trend.map(x=>x.month),group.trend.map(x=>x.sales.value),{line:group.trend.map(x=>x.revenue.value),left:'销量（件）',right:'销售额（'+country.currency+'）'})+`<details><summary>查看月度数据</summary>${table(['月份','销量','销售额 '+country.currency,'销量有数据父体','销售额有数据父体'],group.trend.map(x=>[x.month,fmt(x.sales.value),fmt(x.revenue.value),x.sales.known+'/'+x.sales.total,x.revenue.known+'/'+x.revenue.total]))}</details>`;
+}
 function typeMarketPanel(country){
  const rows=typeMarketRows(country);return `<p class="muted">统计月份：${esc(country.month)} · 柱状：销量 · 折线：销售额</p>`+plot(rows.map(x=>x.label),rows.map(x=>x.sales),{line:rows.map(x=>x.revenue),left:'销量（件）',right:'销售额（'+country.currency+'）'});
 }
 function plot(labels,bars,{line=null,left='数量',right='',percent=false}={}){
  const valid=x=>x!==null&&x!==undefined&&Number.isFinite(Number(x));
  if(!bars.some(valid)&&!(line||[]).some(valid))return '<p class="muted">暂无可用数据</p>';
- const W=Math.max(620,labels.length*48+120),H=300,L=65,R=65,T=30,B=70,pw=W-L-R,ph=H-T-B;
  const max=Math.max(1,...bars.filter(valid).map(Number)),maxR=Math.max(1,...(line||[]).filter(valid).map(Number));
+ const axisWidth=(m,suffix='')=>Math.max(65,...Array.from({length:5},(_,i)=>(fmt(m*i/4)+suffix).length*9+18));
+ const L=axisWidth(max,percent?'%':''),R=line?axisWidth(maxR,right.includes('%')?'%':''):30,W=Math.max(620,labels.length*48+L+R),H=300,T=30,B=70,pw=W-L-R,ph=H-T-B;
  const x=i=>L+pw*(i+.5)/Math.max(1,labels.length),y=(v,m)=>T+ph-(Number(v)/m)*ph;
  let svg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(left+(line?'与'+right:''))}"><text x="8" y="16">${esc(left)}</text>${line?`<text x="${W-8}" y="16" text-anchor="end">${esc(right)}</text>`:''}`;
  for(let i=0;i<=4;i++){const yy=T+ph*i/4;svg+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#e6ecf5"/><text x="${L-8}" y="${yy+4}" text-anchor="end">${fmt(max*(1-i/4))}${percent?'%':''}</text>${line?`<text x="${W-R+8}" y="${yy+4}">${fmt(maxR*(1-i/4))}${right.includes('%')?'%':''}</text>`:''}`;}
@@ -68,12 +80,12 @@ function plot(labels,bars,{line=null,left='数量',right='',percent=false}={}){
  return `<div class="stat-plot"><div class="stat-legend"><button type="button" data-series="bars" aria-pressed="true">● ${esc(left)}</button>${line?`<button type="button" data-series="lines" aria-pressed="true">━ ${esc(right)}</button>`:''}</div><div class="stat-svg">${svg}</div><output class="stat-readout" aria-live="polite"></output></div>`;
 }
 export async function mountStatistics(root,task,client,alive){
- let stopped=false,timer,snapshot,external=null,searchPreview=null,interpretation=null,externalRevision=null,flow=null,renderSignature='',coreRenderSignature='',searchMetric='search_volume',adsView='type',site=0,price='all',rating='all',urls=[];
+ let stopped=false,timer,snapshot,external=null,searchPreview=null,interpretation=null,externalRevision=null,flow=null,renderSignature='',coreRenderSignature='',searchMetric='search_volume',adsView='type',site=0,price='all',rating='all',trendType=null,urls=[];
  const valid=()=>!stopped&&alive(),q=s=>root.querySelector(s);
  function disposeImages(){urls.splice(0).forEach(URL.revokeObjectURL);}
  async function load(){
   clearTimeout(timer);
-  if(root.querySelector('[contenteditable="true"],[data-autosave="saving"],[data-autosave="failed"]')){timer=setTimeout(load,5000);return;}
+  if(interpretationPending()||root.querySelector('[contenteditable="true"],[data-autosave="saving"],[data-autosave="failed"]')){timer=setTimeout(load,5000);return;}
   try{
    const d=await client.from('market_tag_drafts').select('confirmed_version,status').eq('task_id',task.id).single();if(d.error)throw d.error;if(!valid())return;
    if(d.data.status!=='confirmed'){root.innerHTML='';return;}
@@ -91,7 +103,7 @@ export async function mountStatistics(root,task,client,alive){
     if(!valid())return;
     const result=i=>settled[i].status==='fulfilled'&&!settled[i].value.error?settled[i].value.data:null;
     const e=result(0);if(e){external=e.snapshot;externalRevision=e.revision;}
-    const i=result(1);if(i&&i.tag_version===v&&i.external_revision===externalRevision)interpretation=i;
+    const i=result(1);if(i&&i.tag_version===v&&i.external_revision===externalRevision&&(!interpretation||i.revision>=interpretation.revision)&&!interpretationPending())interpretation=i;
     flow=result(2)||flow;const policy=result(3);if(policy&&flow)flow={...flow,policy};
     if(!external)try{const s=await client.from('market_external_calls').select('task_id,tool,state,actual_credits,reserved_credits,receipt').eq('task_id',task.id).eq('tool','get_keyword_aba_trends').eq('state','succeeded');if(valid()&&!s.error)searchPreview=searchFromReceipts(s.data,task);}catch{}
     const signature=JSON.stringify([snapshot,externalRevision,searchPreview,interpretation?.revision,flow]);
@@ -115,14 +127,16 @@ export async function mountStatistics(root,task,client,alive){
  }
  function render(only=null){
   const scrollY=window.scrollY;if(!only)disposeImages();const source=snapshot.countries[site];const c=source?ratingGroups43(source):null;if(!c){root.innerHTML='<p>暂无确认数据</p>';return;}
-  const panels=[];const section=(i,body)=>panels.push(`<section class="stat-section" id="stat-section-${i}" tabindex="-1"><h2><span>${i==='4a'?'04A':String(i).padStart(2,'0')}</span> ${i==='4a'?'各类型市场份额':labels[i-1]}${i===13?' <small class="interpretation-subtitle muted">仅供参考</small>':''}</h2>${body}</section>`);
+  const panels=[];const section=(i,body)=>panels.push(`<section class="stat-section" id="stat-section-${i}" tabindex="-1"><h2><span>${i==='4a'?'04A':i==='4b'?'04B':String(i).padStart(2,'0')}</span> ${i==='4a'?'各类型销量与销售额趋势':i==='4b'?'各类型市场份额':labels[i-1]}${i===13?' <small class="interpretation-subtitle muted">仅供参考</small>':''}</h2>${body}</section>`);
   section(1,`<details class="stat-products"><summary>父体产品列表（${c.rows.length}）</summary><div class="table-wrap"><table><thead><tr><th>图片</th><th>产品 / 父ASIN</th><th>类型</th><th>新老品</th><th>价格段</th><th>销量</th><th>全部字段</th></tr></thead><tbody>${c.rows.map((r,i)=>`<tr><td data-stat-image="${i}"></td><td>${esc(r.title||'标题缺失')}<small>${esc(r.parent)}</small></td><td>${esc(r.type_name)}</td><td>${esc({new:'新品',old:'老品',unknown:'未知'}[r.age])}</td><td>${esc(r.price_band?.label||'未知')}</td><td>${fmt(r.sales)}</td><td><details><summary>查看</summary>${table(['字段','原始值'],Object.entries(r.raw_fields).map(([k,v])=>[k,v===null?'—':v]))}</details></td></tr>`).join('')}</tbody></table></div></details>`);
   section(2,`<div class="stat-types">${c.types.map(t=>`<article><div data-stat-type="${esc(t.representative_id)}"></div><h3>${esc(t.name)}</h3><p>${esc(t.definition)}</p></article>`).join('')}</div>`);
   const ext=external?.countries?.find(x=>x.country===c.country);
   const searchExt=ext||searchPreview?.countries?.find(x=>x.country===c.country);
   section(3,flowNotice(flow,'search',!!searchExt?.search?.length)+searchPanel(searchExt,{metric:searchMetric}));
   section(4,plot(c.trend.map(x=>x.month),c.trend.map(x=>x.sales.value),{line:c.trend.map(x=>x.revenue.value),left:'销量（件）',right:'销售额（'+c.currency+'）'})+`<details><summary>查看数据（${c.trend.length}个完整月）</summary>${table(['月份','销量','销售额 '+c.currency],c.trend.map(x=>[x.month,fmt(x.sales.value),fmt(x.revenue.value)]))}</details>`);
-  section('4a',typeMarketPanel(c));
+  const typeGroups=typeTrendRows(c);if(!typeGroups.some(g=>g.id===trendType))trendType=typeGroups[0]?.id;
+  section('4a',`<div class="stat-tabs">${typeGroups.map(g=>`<button type="button" data-trend-type="${esc(g.id)}" aria-pressed="${g.id===trendType}">${esc(g.name)}</button>`).join('')}</div>`+typeTrendPlot(c,typeGroups.find(g=>g.id===trendType)));
+  section('4b',typeMarketPanel(c));
   section(5,plot(c.brands.map(x=>x.label),c.brands.map(x=>x.sales_share),{line:c.brands.map(x=>x.revenue.value),left:'销量占比（%）',right:'销售额（'+c.currency+'）',percent:true}));
   section(6,plot(c.links.map(x=>x.label),c.links.map(x=>x.sales_share),{left:'销量占比（%）',percent:true}));
   const tabs=(kind,choices,current)=>`<div class="stat-tabs">${choices.map(([value,label])=>`<button data-${kind}="${value}" aria-pressed="${current===value}">${label}</button>`).join('')}</div>`;
@@ -133,20 +147,23 @@ export async function mountStatistics(root,task,client,alive){
   section(11,plot(c.sellers.map(x=>x.label),c.sellers.map(x=>x.count),{line:c.sellers.map(x=>x.sales_share),left:'产品数量（组）',right:'销量占比（%）'}));
   section(12,plot(c.buybox.map(x=>x.label),c.buybox.map(x=>x.count),{left:'产品数量（组）'}));
   section(13,flowNotice(flow,'interpretation',!!interpretation?.blocks?.length)+interpretationPanel(interpretation,c.country));
-  if(only){const holder=document.createElement('div');holder.innerHTML=panels.join('');for(const id of only){const fresh=holder.querySelector('#stat-section-'+id),old=q('#stat-section-'+id);if(fresh&&old)old.replaceWith(fresh);}}
+  if(only){const holder=document.createElement('div');holder.innerHTML=panels.join('');for(const id of only){const fresh=holder.querySelector('#stat-section-'+id),old=q('#stat-section-'+id);if(fresh&&old&&!(id===13&&old._interpretationEditor))old.replaceWith(fresh);}}
   else {
-  root.innerHTML=`${snapshot.countries.length>1?`<label>国家<select id="stat-country">${snapshot.countries.map((c,i)=>`<option value="${i}" ${i===site?'selected':''}>${esc(c.country)}</option>`).join('')}</select></label>`:''}${panels.join('')}`;
+  if(q('#stat-section-13')){const holder=document.createElement('div');holder.innerHTML=panels.join('');for(const fresh of holder.children){const old=q('#'+fresh.id);if(old&&!(fresh.id==='stat-section-13'&&old._interpretationEditor))old.replaceWith(fresh.cloneNode(true));}}else root.innerHTML=`${snapshot.countries.length>1?`<label>国家<select id="stat-country">${snapshot.countries.map((c,i)=>`<option value="${i}" ${i===site?'selected':''}>${esc(c.country)}</option>`).join('')}</select></label>`:''}${panels.join('')}`;
   }
-  bindInterpretation(q('#stat-section-13'),interpretation,client,task.id,async()=>{const r=await client.from('market_interpretation_drafts').select('*').eq('task_id',task.id).single();if(r.error)throw r.error;if(valid()){interpretation=r.data;render();}});
-  root.querySelectorAll('[data-price]').forEach(b=>b.onclick=()=>{price=b.dataset.price;const y=window.scrollY;render();window.scrollTo(0,y);});root.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{rating=b.dataset.rating;const y=window.scrollY;render();window.scrollTo(0,y);});if(!only)q('#stat-country')?.addEventListener('change',e=>{site=Number(e.target.value);render();});
+  bindInterpretation(q('#stat-section-13'),interpretation,client,task.id);
+  root.querySelectorAll('[data-price]').forEach(b=>b.onclick=()=>{price=b.dataset.price;render([7]);});
+  root.querySelectorAll('[data-rating]').forEach(b=>b.onclick=()=>{rating=b.dataset.rating;render([9]);});
+  root.querySelectorAll('[data-trend-type]').forEach(b=>b.onclick=()=>{trendType=b.dataset.trendType;render(['4a']);});
+  if(q('#stat-country'))q('#stat-country').onchange=e=>{site=Number(e.target.value);render();};
   root.querySelectorAll('[data-series]').forEach(b=>b.onclick=()=>{const active=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',String(active));b.closest('.stat-plot').querySelectorAll('.stat-'+b.dataset.series).forEach(x=>x.style.visibility=active?'visible':'hidden');});
   root.querySelectorAll('svg [tabindex]').forEach(el=>{const show=()=>{el.closest('.stat-plot').querySelector('output').textContent=el.querySelector('title').textContent;};el.onpointerenter=show;el.onfocus=show;el.onclick=show;});
   const nav=root.parentElement.querySelector('.compact-grid');
-  if(nav&&!nav.querySelector('[data-section-id="4a"]')){nav.querySelectorAll('button').forEach((b,i)=>b.dataset.sectionId=String(i+1));const button=document.createElement('button');button.type='button';button.dataset.sectionId='4a';button.textContent='04A 各类型市场份额';nav.querySelectorAll('button')[3]?.after(button);}
+  if(nav&&nav.dataset.reportNavigation!=='type-trends-v1'){nav.dataset.reportNavigation='type-trends-v1';nav.innerHTML=[...labels.map((label,i)=>({id:String(i+1),label,number:String(i+1).padStart(2,'0')})).slice(0,4),{id:'4a',number:'04A',label:'各类型销量与销售额趋势'},{id:'4b',number:'04B',label:'各类型市场份额'},...labels.map((label,i)=>({id:String(i+1),label,number:String(i+1).padStart(2,'0')})).slice(4)].map(x=>`<button type="button" data-section-id="${x.id}">${x.number} ${esc(x.label)}</button>`).join('');}
   nav?.querySelectorAll('button').forEach(b=>{b.disabled=false;b.onclick=()=>{root.querySelectorAll('.stat-section').forEach(x=>x.classList.remove('stat-target'));const el=q('#stat-section-'+b.dataset.sectionId);if(!el)return;el.classList.add('stat-target');el.focus({preventScroll:true});el.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});};});
 
-  root.querySelectorAll('[data-external-metric]').forEach(b=>b.onclick=()=>{searchMetric=b.dataset.externalMetric;const y=window.scrollY;render();window.scrollTo(0,y);});
-  root.querySelectorAll('[data-external-ads]').forEach(b=>b.onclick=()=>{adsView=b.dataset.externalAds;const y=window.scrollY;render();window.scrollTo(0,y);});
+  root.querySelectorAll('[data-external-metric]').forEach(b=>b.onclick=()=>{searchMetric=b.dataset.externalMetric;render([3]);});
+  root.querySelectorAll('[data-external-ads]').forEach(b=>b.onclick=()=>{adsView=b.dataset.externalAds;render([8]);});
   root.querySelectorAll('[data-external-series]').forEach(b=>b.onclick=()=>{const active=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',String(active));b.closest('.stat-plot').querySelectorAll('[data-search-series="'+b.dataset.externalSeries+'"]').forEach(el=>{el.style.visibility=active?'visible':'hidden';});});
   if(!only)loadImages(c);else window.scrollTo(window.scrollX,scrollY);
  }
