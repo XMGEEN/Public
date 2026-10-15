@@ -1,4 +1,4 @@
-import {mountCompetitor} from './competitor-view.mjs?v=20261015-table-recovery1';
+import {mountCompetitor} from './competitor-view.mjs?v=20261015-needs-fold1';
 let competitorDispose=()=>{};
 import {mountReport} from './report-view.mjs';
 import {mountExports} from './export-view.mjs';

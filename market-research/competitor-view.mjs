@@ -1,10 +1,10 @@
 import {mountExports} from './competitor-export.mjs?v=20261014-stage7-edit';
 import {mountDevelopment} from './competitor-development.mjs?v=20261014-stage7-edit';
-import {sellingTableBody,bindSelling} from './competitor-selling.mjs?v=20261015-table-recovery1';
+import {sellingTableBody,bindSelling} from './competitor-selling.mjs?v=20261015-needs-fold1';
 import {cachedTraffic,trafficTableRows} from './competitor-traffic.mjs?v=20261014-stage7-edit';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export async function mountCompetitor(root,task,client,valid){
- if(!document.querySelector('link[data-competitor-layout]')){const link=document.createElement('link');link.rel='stylesheet';link.href=new URL('./competitor-layout.css?v=20261014-stage7-edit',import.meta.url).href;link.dataset.competitorLayout='';document.head.append(link)}
+ if(!document.querySelector('link[data-competitor-layout]')){const link=document.createElement('link');link.rel='stylesheet';link.href=new URL('./competitor-layout.css?v=20261015-needs-fold1',import.meta.url).href;link.dataset.competitorLayout='';document.head.append(link)}
  root.classList.add('competitor-report');
  const parent=root.parentElement;let taskHeader;
  if(root.id==='panel-competitor'&&parent){const headerNodes=[...parent.children].filter(e=>e.matches('.row,.summary,.materials-line,.tabs,.test-task-notice'));if(headerNodes.length){taskHeader=document.createElement('div');taskHeader.className='competitor-task-header';parent.insertBefore(taskHeader,headerNodes[0]);headerNodes.forEach(e=>taskHeader.append(e));}}

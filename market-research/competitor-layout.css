@@ -58,3 +58,11 @@
 .competitor-report .competitor-priority-value[data-priority-tone=pending]:not([contenteditable=true]){background:#fff0de;color:#a57528}
 .competitor-report .competitor-priority-value[contenteditable=true]{font-size:13px;line-height:1.6;min-width:180px;position:relative;z-index:1;padding:7px;background:#f4f8ff}
 .competitor-development-table small[role=status]:empty{display:none}
+
+/* Keep unmatched needs available without extending the comparison table. */
+.competitor-unmatched{max-width:760px;font-size:13px;color:#52637c}
+.competitor-unmatched>summary{cursor:pointer;width:fit-content;padding:4px 0;color:#345c9b;font-weight:500}
+.competitor-unmatched>summary:focus-visible,.competitor-unmatched-list:focus-visible{outline:2px solid #8eaeed;outline-offset:3px}
+.competitor-unmatched-list{box-sizing:border-box;max-height:220px;overflow-y:auto;overscroll-behavior:contain;margin:10px 0 0;padding:10px 14px;list-style:none;background:#f7f9fd;border:1px solid #e3e8f1;border-radius:6px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 20px}
+.competitor-unmatched-list>li{padding:6px 0;overflow-wrap:anywhere;line-height:1.6}
+@media(max-width:600px){.competitor-unmatched{max-width:calc(100vw - 76px)}.competitor-unmatched-list{grid-template-columns:repeat(2,minmax(0,1fr));max-height:200px;gap:0 12px}}

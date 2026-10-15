@@ -15,7 +15,8 @@ export function sellingPanel(saved,record,op,budget,targets,demands=[]){
  if(!record)return html+'<p class="muted">'+(op?.error_code==='SELLING_SELECTION_REQUIRED'?'候选卖点超过已确认选择边界，完整候选已保存，需确认取舍。':'已完成商品进度单独保存；暂未生成可展示的卖点矩阵。')+'</p>';
  const rows=record.result.comparison.rows;
  html+=`<div class="competitor-scroll"><table class="competitor-selling-matrix" style="min-width:1290px;width:100%;table-layout:fixed"><colgroup><col style="width:70px"><col style="width:220px">${targets.map(()=>'<col style="width:200px">').join('')}</colgroup><tr><th>排名</th><th>统一需求／卖点</th>${targets.map(t=>`<th>${esc(t.brand||'未提供')}<br>${esc(t.parent)}</th>`).join('')}</tr>${rows.map(row=>`<tr><td>${row.rank??'待排序'}</td><td><div data-selling-field="${esc('point/'+row.point_id+'/name')}">${esc(row.point_name)}</div></td>${targets.map(t=>{const item=row.parameters[t.parent];return `<td><div data-selling-field="${esc('point/'+row.point_id+'/target/'+t.parent)}">${esc(item?.value??missing[item?.status]??'未提供')}</div></td>`}).join('')}</tr>`).join('')}</table></div>`;
- html+=(record.result.comparison.needs_without_points||[]).map(d=>`<p>${esc(d.name)}：暂未找到对应卖点</p>`).join('');
+ const unmatched=record.result.comparison.needs_without_points||[];
+ if(unmatched.length)html+=`<details class="competitor-unmatched"><summary>未匹配卖点的需求（${unmatched.length}项）</summary><ul class="competitor-unmatched-list" tabindex="0" aria-label="未匹配卖点的需求列表">${unmatched.map(d=>`<li>${esc(d.name)}</li>`).join('')}</ul></details>`;
  return html;
 }
 export function bindSelling(root,record,edits,client,task){
@@ -39,6 +40,6 @@ export function sellingTableBody(saved,record,op,budget,targets,demands=[]){
  for(const row of [...matrix.rows].slice(1)){const rank=row.cells[0],name=row.cells[1];const cell=document.createElement('th');cell.scope='row';cell.className='competitor-selling-label';const marker=document.createElement('span');marker.className='competitor-need-rank';marker.textContent=rank.textContent+' · ';cell.append(marker,...name.childNodes);rank.remove();name.replaceWith(cell);body.append(row);}
  matrix.parentElement.remove();
  }
- for(const note of [...content.querySelectorAll('p')]){const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=targets.length+1;cell.append(note);row.append(cell);body.append(row);}
+ for(const note of [...content.querySelectorAll('p,details.competitor-unmatched')]){const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=targets.length+1;cell.append(note);row.append(cell);body.append(row);}
  return body;
 }
